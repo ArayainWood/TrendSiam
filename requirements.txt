@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+# TrendSiam Project - Secure Dependencies
+# Security-audited and version-pinned requirements
+# Install with: pip install -r requirements.txt
+
+# ===== CORE DEPENDENCIES =====
+
+# YouTube data extraction (security-audited version)
+yt-dlp>=2024.1.1,<2025.0.0  # Latest stable, security patches
+
+# OpenAI API for summarization (secure version)
+openai>=1.6.0,<2.0.0  # Stable API with security fixes
+
+# Environment variables (secure handling)
+python-dotenv>=1.0.0,<2.0.0  # Secure env var loading
+
+# HTTP requests with security features
+requests>=2.31.0,<3.0.0  # Security patches, cert validation
+urllib3>=2.0.7,<3.0.0  # Security updates, no vulnerabilities
+certifi>=2023.11.17  # Latest CA certificates
+
+# ===== WEB FRAMEWORK =====
+
+# Streamlit web app (latest stable)
+streamlit>=1.29.0,<2.0.0  # Security patches, stable API
+
+# ===== UTILITIES =====
+
+# Progress bar for batch operations
+tqdm>=4.66.0,<5.0.0  # Latest stable
+
+# Path handling (cross-platform)
+pathlib2>=2.3.7,<3.0.0  # Secure path operations
+
+# Type extensions for Python < 3.8 compatibility
+typing-extensions>=4.8.0,<5.0.0  # Latest stable
+
+# Data validation and parsing
+pydantic>=2.5.0,<3.0.0  # Input validation and data models
+
+# Rate limiting for API calls (optional - built-in implementation available)
+# ratelimit>=2.2.1,<3.0.0  # External rate limiting library
+
+# ===== SECURITY DEPENDENCIES =====
+
+# Cryptography for secure operations
+cryptography>=41.0.0,<42.0.0  # Security-focused crypto library
+
+# JSON Web Tokens (if needed for auth)
+PyJWT>=2.8.0,<3.0.0  # Secure JWT handling
+
+# Input sanitization
+bleach>=6.1.0,<7.0.0  # HTML/text sanitization
+
+# ===== DEVELOPMENT & TESTING =====
+
+# Linting and code quality (dev only)
+# flake8>=6.0.0,<7.0.0
+# black>=23.0.0,<24.0.0
+# mypy>=1.8.0,<2.0.0
+
+# Security scanning (dev only)
+# bandit>=1.7.5,<2.0.0
+# safety>=2.3.0,<3.0.0
+
+# ===== VERSION CONSTRAINTS =====
+
+# Ensure compatible Python version
+# python_requires>=3.8
+
+# Pin critical transitive dependencies to avoid supply chain attacks
+idna>=3.6,<4.0  # URL handling
+charset-normalizer>=3.3.0,<4.0  # Character encoding
+setuptools>=68.0.0  # Package installation security 

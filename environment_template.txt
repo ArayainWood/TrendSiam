@@ -1,0 +1,127 @@
+# ===============================================
+# TrendSiam Secure Environment Configuration
+# ===============================================
+#
+# SECURITY NOTICE:
+# This file contains sensitive information and should NEVER be committed to version control.
+# Copy this file to '.env' and fill in your actual credentials.
+#
+# Instructions:
+# 1. Copy this file: cp environment_template.txt .env
+# 2. Edit .env with your actual API keys
+# 3. Ensure .env is in your .gitignore file
+# 4. Never share your .env file or commit it to git
+#
+# ===============================================
+
+# ===== API CREDENTIALS =====
+
+# OpenAI API Key (Required for AI summarization and image generation)
+# Get your key from: https://platform.openai.com/api-keys
+# Format: sk-...
+OPENAI_API_KEY=your-openai-api-key-here
+
+# YouTube Data API v3 Key (Required for video data fetching)
+# Get your key from: https://console.cloud.google.com/apis/credentials
+# Enable YouTube Data API v3 in your Google Cloud project
+YOUTUBE_API_KEY=your-youtube-api-key-here
+
+# ===== APPLICATION CONFIGURATION =====
+
+# OpenAI Model Configuration
+OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_MAX_TOKENS=150
+OPENAI_TEMPERATURE=0.3
+OPENAI_TIMEOUT=30
+OPENAI_MAX_RETRIES=2
+
+# Request Timeout Settings (seconds)
+REQUEST_TIMEOUT=30
+
+# ===== DATA CONFIGURATION =====
+
+# News data file locations
+NEWS_DATA_FILE=thailand_trending_summary.json
+BACKUP_DATA_FILE=thailand_trending_api.json
+
+# AI generated images directory
+IMAGES_DIR=ai_generated_images
+
+# Maximum news items to process
+MAX_NEWS_ITEMS=50
+
+# ===== SECURITY CONFIGURATION =====
+
+# Logging configuration
+LOG_LEVEL=INFO
+
+# Debug mode (set to 'true' for development, 'false' for production)
+DEBUG_MODE=false
+
+# ===== RATE LIMITING =====
+
+# API rate limits (requests per minute)
+OPENAI_RATE_LIMIT=60
+YOUTUBE_RATE_LIMIT=100
+DALLE_RATE_LIMIT=10
+
+# ===== COMPLIANCE SETTINGS =====
+
+# Data retention period (days)
+DATA_RETENTION_DAYS=30
+
+# Privacy compliance mode (set to 'strict' for maximum privacy)
+PRIVACY_MODE=strict
+
+# ===============================================
+# SECURITY CHECKLIST:
+# ===============================================
+#
+# ✅ API keys are stored in .env file (not in code)
+# ✅ .env file is in .gitignore
+# ✅ Strong, unique API keys are used
+# ✅ Debug mode is disabled for production
+# ✅ Appropriate rate limits are configured
+# ✅ Data retention policies are set
+#
+# ===============================================
+# TROUBLESHOOTING:
+# ===============================================
+#
+# If you encounter issues:
+#
+# 1. API Key Issues:
+#    - Ensure API keys start with correct prefixes (sk- for OpenAI)
+#    - Check that APIs are enabled in your cloud console
+#    - Verify your account has sufficient quota/credits
+#
+# 2. Rate Limiting Issues:
+#    - Reduce rate limits if getting 429 errors
+#    - Check your API plan limits
+#    - Consider upgrading your API plan if needed
+#
+# 3. Data Issues:
+#    - Ensure data files exist and are readable
+#    - Check file permissions
+#    - Verify JSON file format is valid
+#
+# 4. Security Issues:
+#    - Run: python test_security_framework.py
+#    - Check logs/ directory for security events
+#    - Review SECURITY_AUDIT_REPORT.md
+#
+# ===============================================
+# SUPPORT:
+# ===============================================
+#
+# For security-related questions:
+# - Review: SECURITY_AUDIT_REPORT.md
+# - Check: logs/trendsiam_errors.log
+# - Contact: security@trendsiam.app
+#
+# For general support:
+# - Review: README.md
+# - Check: logs/trendsiam.log
+# - Contact: support@trendsiam.app
+#
+# =============================================== 
