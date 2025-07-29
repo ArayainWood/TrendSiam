@@ -4,6 +4,12 @@ AI Image Generator for TrendSiam News
 
 This module handles AI-powered editorial illustration generation
 for trending Thai news using OpenAI DALL-E API.
+
+Enhanced version with:
+- Always generates new images (overwrites existing)
+- Improved prompt sanitization and generation
+- Robust error handling
+- Better logging and traceability
 """
 
 import json
@@ -17,6 +23,8 @@ from openai import OpenAI
 import time
 import logging
 import re
+import html
+import unicodedata
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -26,8 +34,88 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def get_precise_score(item):
+    """
+    Get the most precise popularity score available for an item.
+    
+    Prioritizes popularity_score_precise but falls back to popularity_score
+    for backward compatibility.
+    
+    Args:
+        item: News item dictionary
+        
+    Returns:
+        Float score (precise if available, otherwise fallback)
+    """
+    precise_score = item.get('popularity_score_precise')
+    if precise_score is not None:
+        try:
+            return float(precise_score)
+        except (ValueError, TypeError):
+            pass
+    
+    # Fallback to regular score
+    fallback_score = item.get('popularity_score')
+    try:
+        return float(fallback_score) if fallback_score is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def sanitize_prompt_text(text: str) -> str:
+    """
+    Sanitize text for use in AI prompts by removing dangerous characters,
+    HTML tags, excessive whitespace, and normalizing unicode.
+    
+    Args:
+        text: Raw text to sanitize
+        
+    Returns:
+        Sanitized text safe for AI prompt use
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    
+    try:
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # Decode HTML entities
+        text = html.unescape(text)
+        
+        # Normalize unicode characters
+        text = unicodedata.normalize('NFKC', text)
+        
+        # Remove dangerous characters and symbols that might confuse AI
+        # Keep Thai characters, English letters, numbers, basic punctuation
+        text = re.sub(r'[^\u0E00-\u0E7F\w\s\.,!?\-\(\):;\'\"]+', ' ', text)
+        
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Remove leading/trailing whitespace
+        text = text.strip()
+        
+        # Truncate to reasonable length (DALL-E has prompt limits)
+        max_length = 800  # Conservative limit for DALL-E
+        if len(text) > max_length:
+            text = text[:max_length].rsplit(' ', 1)[0] + '...'
+        
+        return text
+        
+    except Exception as e:
+        logger.warning(f"Error sanitizing text: {e}")
+        return "news content"
+
+
+def generate_safe_fallback_prompt() -> str:
+    """Generate a safe fallback prompt when no content is available."""
+    return "A professional editorial illustration of a trending news event in Thailand, modern newspaper style, realistic composition with people and locations, photojournalistic quality"
+
+
 class TrendSiamImageGenerator:
-    """AI Image Generator for TrendSiam Editorial Illustrations"""
+    """Enhanced AI Image Generator for TrendSiam Editorial Illustrations"""
     
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -93,156 +181,180 @@ class TrendSiamImageGenerator:
         
         return keywords[:5]  # Return top 5 keywords
 
-    def generate_realistic_editorial_prompt(self, news_item: Dict[str, Any]) -> str:
+    def safe_generate_prompt_content(self, news_item: Dict[str, Any]) -> str:
         """
-        Generate realistic editorial illustration prompts based on actual news content.
+        Helper function to extract and sanitize content for prompt generation.
+        Uses summary_en first, then summary, then title as fallback.
+        
+        Args:
+            news_item: Dictionary containing news data
+            
+        Returns:
+            String containing the most relevant sanitized content for prompt generation
+        """
+        if not news_item or not isinstance(news_item, dict):
+            logger.warning("Invalid news item provided")
+            return generate_safe_fallback_prompt()
+        
+        # Priority order: summary_en -> summary -> title
+        summary_en = news_item.get('summary_en', '').strip()
+        summary_th = news_item.get('summary', '').strip()
+        title = news_item.get('title', '').strip()
+        
+        logger.info(f"🔍 Content analysis for prompt generation:")
+        logger.info(f"   Summary_en: {'✅ Available' if summary_en and not summary_en.startswith('Summary failed') else '❌ Not available'}")
+        logger.info(f"   Summary: {'✅ Available' if summary_th and not summary_th.startswith('สรุปไม่สำเร็จ') else '❌ Not available'}")
+        logger.info(f"   Title: {'✅ Available' if title else '❌ Not available'}")
+        
+        # Use English summary if available and valid
+        if summary_en and not summary_en.startswith('Summary failed'):
+            logger.info("📝 Using English summary for prompt generation")
+            content = sanitize_prompt_text(summary_en)
+            if content:
+                return content
+        
+        # Fall back to Thai summary if available and valid
+        if summary_th and not summary_th.startswith('สรุปไม่สำเร็จ'):
+            logger.info("📝 Using Thai summary for prompt generation")
+            content = sanitize_prompt_text(summary_th)
+            if content:
+                return content
+        
+        # Final fallback to title
+        if title:
+            logger.info("📝 Using title for prompt generation (fallback)")
+            content = sanitize_prompt_text(title)
+            if content:
+                return content
+        
+        # Last resort
+        logger.warning("⚠️ No valid content found, using safe fallback")
+        return "trending news story in Thailand"
+
+    def generate_enhanced_editorial_prompt(self, news_item: Dict[str, Any]) -> str:
+        """
+        Generate enhanced editorial illustration prompts with improved sanitization and fallbacks.
         Creates photojournalistic-style scenes depicting real people, events, and locations.
         
         Args:
             news_item: Dictionary containing news data
             
         Returns:
-            Detailed prompt for creating realistic editorial-style illustration
+            Detailed sanitized prompt for creating realistic editorial-style illustration
         """
-        # Get news details - prioritize English summary for clarity
-        title = news_item.get('title', '')
-        summary_en = news_item.get('summary_en', '')
-        summary_th = news_item.get('summary', '')
-        category = news_item.get('auto_category', '')
-        channel = news_item.get('channel', '')
-        
-        # Use English summary if available, fall back to Thai
-        summary = summary_en if summary_en and not summary_en.startswith('Summary failed') else summary_th
-        
-        # Base realistic editorial style template
-        base_style = (
-            "Realistic editorial illustration in photojournalistic style, 1024x1024 format. "
-            "Professional news photography composition adapted as detailed illustration. "
-            "Show actual people, real scenes, and specific events described in the news. "
-            "Avoid abstract art, symbols, or metaphors. "
-        )
-        
-        # Generate content-specific realistic scenes based on actual news content
-        
-        # VOLLEYBALL/SPORTS NEWS
-        if any(keyword in title.lower() + summary.lower() for keyword in ['volleyball', 'วอลเลย์บอล', 'vnl', 'ไทย พบ', 'thailand']):
-            if 'thailand' in summary.lower() and 'canada' in summary.lower():
-                return (f"{base_style}Wide shot of an intense volleyball match in progress. "
-                       "Thai national team players in red and white uniforms mid-action - one player jumping high to spike the ball over the net, "
-                       "while Canadian players in red uniforms attempt to block. Professional indoor volleyball arena with spectators in the background. "
-                       "Players show athletic determination and competitive spirit. Capture the exact moment of the spike with the ball in motion. "
-                       "Arena lighting highlights the action, with team benches and officials visible.")
-            else:
-                return (f"{base_style}Dynamic volleyball scene showing players in team uniforms during an intense rally. "
-                       "Athletes jumping, diving, and coordinating on a professional volleyball court. "
-                       "Spectators in arena stands, coaches on sidelines, scoreboard visible. "
-                       "Captures the athletic skill and teamwork of competitive volleyball.")
-        
-        # FOOTBALL/SOCCER NEWS  
-        elif any(keyword in title.lower() + summary.lower() for keyword in ['football', 'ฟุตบอล', 'chelsea', 'psg', 'fifa', 'premier league']):
-            if 'chelsea' in summary.lower() and 'psg' in summary.lower():
-                return (f"{base_style}Epic soccer match scene from FIFA Club World Cup Final. "
-                       "Chelsea players in blue uniforms and PSG players in navy blue competing for the ball on a professional football pitch. "
-                       "Mid-action shot with players running, tackling, and positioning. Stadium packed with enthusiastic fans, "
-                       "floodlights illuminating the night match. Referee and linesmen visible, FIFA branding on stadium displays.")
-            else:
-                return (f"{base_style}Professional football match in action. Players in team uniforms competing on a well-maintained pitch. "
-                       "Stadium filled with supporters, coaching staff on sidelines, match officials monitoring the game. "
-                       "Captures the intensity and skill of competitive football.")
-        
-        # K-POP/MUSIC NEWS
-        elif any(keyword in title.lower() + summary.lower() for keyword in ['blackpink', 'music', 'mv', 'เพลง', 'jump']):
-            if 'blackpink' in summary.lower():
-                return (f"{base_style}BLACKPINK performing live on a spectacular concert stage. "
-                       "Four members in stylish performance outfits singing and dancing under dramatic stage lighting with LED screens. "
-                       "Thousands of enthusiastic fans with light sticks (bong) creating a sea of pink lights in the darkened arena. "
-                       "Professional concert setup with multiple cameras, backup dancers, and pyrotechnics. "
-                       "Captures the energy and scale of a major K-pop concert performance.")
-            else:
-                return (f"{base_style}Live music performance showing artists on stage with full lighting and sound setup. "
-                       "Enthusiastic audience with hands raised, professional concert venue with stage effects. "
-                       "Musicians with instruments and microphones, capturing the live music experience.")
-        
-        # GAMING/STREAMING NEWS
-        elif any(keyword in title.lower() + summary.lower() for keyword in ['minecraft', 'gaming', 'เกม', 'brainrot', 'round', 'shorts', 'streamer']):
-            if 'brainrot' in summary.lower() or 'round' in summary.lower():
-                return (f"{base_style}Professional gaming streamer setup in action. "
-                       "Content creator at a high-end gaming desk with multiple monitors displaying gameplay, "
-                       "mechanical RGB keyboard, gaming mouse, and professional microphone. "
-                       "Chat messages and viewer count visible on secondary screens, LED lighting creating ambient gaming atmosphere. "
-                       "Shows the modern world of competitive gaming and live streaming content creation.")
-            elif 'minecraft' in summary.lower():
-                return (f"{base_style}Gaming content creator recording Minecraft gameplay. "
-                       "Person at computer setup with Minecraft world visible on main monitor, "
-                       "recording equipment and gaming peripherals on desk. Room setup optimized for content creation "
-                       "with good lighting and organized gaming space. Captures the popular gaming content creation scene.")
-            else:
-                return (f"{base_style}Modern gaming environment with person engaged in video game. "
-                       "Gaming setup with monitors, controllers, and gaming accessories. "
-                       "Shows the contemporary digital entertainment and gaming culture.")
-        
-        # ANIME/ENTERTAINMENT NEWS
-        elif any(keyword in title.lower() + summary.lower() for keyword in ['anime', 'อนิเมะ', 'gachiakuta', 'ani-one']):
-            return (f"{base_style}Anime viewing experience showing people watching Japanese animation. "
-                   "Screen displaying colorful anime scenes with subtitles, viewers engaged with the content. "
-                   "Modern entertainment setup representing the popularity of anime content. "
-                   "Captures the global reach of Japanese animation and its dedicated fanbase.")
-        
-        # POLITICAL/NEWS
-        elif "การเมือง" in category or any(keyword in summary.lower() for keyword in ['government', 'political', 'minister', 'election']):
-            return (f"{base_style}Political news scene showing officials at press conference or government meeting. "
-                   "Politicians or government representatives at podium with microphones, "
-                   "journalists with cameras and recording equipment, official government setting. "
-                   "Captures the formal atmosphere of political news and democratic processes.")
-        
-        # BUSINESS/FINANCE
-        elif "ธุรกิจ" in category or any(keyword in summary.lower() for keyword in ['business', 'economic', 'financial', 'market']):
-            return (f"{base_style}Business news scene in modern office or financial district. "
-                   "Professionals in business attire discussing charts and financial data, "
-                   "stock market displays, corporate meeting rooms or trading floor environment. "
-                   "Represents the world of business and economic activity.")
-        
-        # HEALTH/MEDICAL
-        elif "สุขภาพ" in category or any(keyword in summary.lower() for keyword in ['health', 'medical', 'doctor', 'hospital']):
-            return (f"{base_style}Healthcare scene showing medical professionals in hospital or clinic setting. "
-                   "Doctors, nurses, or healthcare workers in medical environment with patients, "
-                   "medical equipment and clean healthcare facilities. "
-                   "Represents modern healthcare and medical news stories.")
-        
-        # EDUCATION
-        elif "การศึกษา" in category or any(keyword in summary.lower() for keyword in ['education', 'school', 'university', 'student']):
-            return (f"{base_style}Educational scene in classroom, lecture hall, or academic setting. "
-                   "Students and teachers engaged in learning activities, "
-                   "educational materials and modern learning environment. "
-                   "Captures the importance of education and academic achievement.")
-        
-        # GENERIC NEWS (fallback)
-        else:
-            # Analyze summary content for specific scene details
-            summary_lower = summary.lower()
+        try:
+            # Get the most relevant content using safe helper
+            content = self.safe_generate_prompt_content(news_item)
             
-            if 'live' in summary_lower or 'streaming' in summary_lower:
-                return (f"{base_style}Live streaming or broadcast scene. "
-                       "People engaged in live content creation or viewing, "
-                       "professional broadcasting equipment, modern media environment. "
-                       "Shows the contemporary digital media landscape.")
+            # Get additional metadata for context
+            title = sanitize_prompt_text(news_item.get('title', ''))
+            category = news_item.get('auto_category', '')
+            channel = sanitize_prompt_text(news_item.get('channel', ''))
             
-            elif 'competition' in summary_lower or 'contest' in summary_lower:
-                return (f"{base_style}Competitive event scene with participants and audience. "
-                       "People engaged in competition or contest activity, "
-                       "organized event setting with spectators and officials. "
-                       "Captures the spirit of competition and achievement.")
+            logger.info(f"🎨 Generating prompt for: {title[:50]}...")
+            logger.info(f"📋 Category: {category}")
+            logger.info(f"📺 Channel: {channel}")
+            logger.info(f"📝 Content source: {content[:100]}...")
             
+            # Base realistic editorial style template
+            base_style = (
+                "An artistic illustration of the trending news: "
+            )
+            
+            # Generate content-specific realistic scenes based on actual news content
+            content_lower = content.lower()
+            
+            # SPORTS (volleyball, football, etc.)
+            if any(keyword in content_lower for keyword in ['volleyball', 'วอลเลย์บอล', 'vnl', 'football', 'ฟุตบอล', 'soccer', 'match', 'team', 'players', 'sport', 'กีฬา', 'แข่งขัน']):
+                prompt = (f"{base_style}{content}. "
+                         f"Sports illustration showing athletes in action during a competitive match. "
+                         f"Professional sports venue with players demonstrating skill and teamwork. "
+                         f"Modern editorial style, realistic composition.")
+            
+            # MUSIC/ENTERTAINMENT
+            elif any(keyword in content_lower for keyword in ['music', 'เพลง', 'concert', 'performance', 'blackpink', 'mv', 'song', 'artist', 'live', 'entertainment', 'บันเทิง']):
+                prompt = (f"{base_style}{content}. "
+                         f"Music entertainment illustration with artists performing. "
+                         f"Professional concert lighting, modern entertainment venue. "
+                         f"Musicians with instruments, capturing live music energy. "
+                         f"Editorial newspaper style, realistic composition.")
+            
+            # GAMING/TECHNOLOGY
+            elif any(keyword in content_lower for keyword in ['gaming', 'เกม', 'game', 'minecraft', 'roblox', 'streamer', 'computer', 'technology', 'digital', 'pubg', 'พับจี']):
+                prompt = (f"{base_style}{content}. "
+                         f"Gaming technology illustration with people using modern digital devices. "
+                         f"Gaming setup with monitors, modern gaming equipment. "
+                         f"Content creators engaged with technology. "
+                         f"Editorial illustration style, realistic composition.")
+            
+            # TV/SERIES/DRAMA
+            elif any(keyword in content_lower for keyword in ['series', 'ซีรีส์', 'drama', 'ละคร', 'tv', 'trailer', 'episode', 'show', 'netflix']):
+                prompt = (f"{base_style}{content}. "
+                         f"Television entertainment illustration with professional production. "
+                         f"Actors in dramatic scene with modern filming equipment. "
+                         f"High-quality entertainment production environment. "
+                         f"Editorial newspaper style, realistic composition.")
+            
+            # NEWS/POLITICS
+            elif any(keyword in content_lower for keyword in ['news', 'ข่าว', 'politics', 'government', 'political', 'minister', 'official', 'การเมือง']):
+                prompt = (f"{base_style}{content}. "
+                         f"News conference illustration with officials and journalists. "
+                         f"Professional setting with media equipment and microphones. "
+                         f"Formal government environment. "
+                         f"Editorial newspaper illustration, realistic composition.")
+            
+            # BUSINESS/FINANCE
+            elif any(keyword in content_lower for keyword in ['business', 'ธุรกิจ', 'economic', 'financial', 'market', 'company']):
+                prompt = (f"{base_style}{content}. "
+                         f"Business illustration with professionals in modern office setting. "
+                         f"People in business attire discussing charts and financial data. "
+                         f"Corporate meeting environment. "
+                         f"Editorial newspaper style, realistic composition.")
+            
+            # HEALTH/MEDICAL
+            elif any(keyword in content_lower for keyword in ['health', 'สุขภาพ', 'medical', 'hospital', 'doctor', 'treatment']):
+                prompt = (f"{base_style}{content}. "
+                         f"Healthcare illustration in modern medical facility. "
+                         f"Medical professionals in clean hospital environment. "
+                         f"Healthcare workers with modern medical equipment. "
+                         f"Editorial newspaper style, realistic composition.")
+            
+            # EDUCATION
+            elif any(keyword in content_lower for keyword in ['education', 'การศึกษา', 'school', 'university', 'student', 'learning']):
+                prompt = (f"{base_style}{content}. "
+                         f"Educational illustration with students and teachers. "
+                         f"Modern classroom or academic setting with learning activities. "
+                         f"Educational facility with teaching materials. "
+                         f"Editorial newspaper style, realistic composition.")
+            
+            # GENERAL NEWS (fallback)
             else:
-                return (f"{base_style}General news scene depicting people engaged in the described activity. "
-                       "Realistic portrayal of the events mentioned in the news story, "
-                       "showing actual people, locations, and activities. "
-                       "Professional news photography style capturing real-world events.")
+                prompt = (f"{base_style}{content}. "
+                         f"Editorial news illustration depicting people engaged in the described activity. "
+                         f"Realistic portrayal of current events with actual people and locations. "
+                         f"Professional newspaper illustration style.")
+            
+            # Final sanitization and validation
+            final_prompt = sanitize_prompt_text(prompt)
+            
+            # Ensure we have a valid prompt
+            if len(final_prompt) < 20:
+                logger.warning("Generated prompt too short, using fallback")
+                final_prompt = generate_safe_fallback_prompt()
+            
+            # Log the final prompt for traceability
+            logger.info(f"📝 Final prompt ({len(final_prompt)} chars): {final_prompt[:150]}...")
+            
+            return final_prompt
+            
+        except Exception as e:
+            logger.error(f"Error generating prompt: {e}")
+            return generate_safe_fallback_prompt()
 
     # Keep old function name for compatibility
     def generate_editorial_illustration_prompt(self, news_item: Dict[str, Any]) -> str:
-        """Wrapper for backward compatibility - calls the new realistic prompt generator"""
-        return self.generate_realistic_editorial_prompt(news_item)
+        """Wrapper for backward compatibility - calls the new enhanced prompt generator"""
+        return self.generate_enhanced_editorial_prompt(news_item)
 
     def load_news_data(self) -> List[Dict[str, Any]]:
         """
@@ -279,13 +391,21 @@ class TrendSiamImageGenerator:
         Save updated news data back to JSON file.
         
         Args:
-            news_data: List of news items with updated image URLs
+            news_data: List of news items to save
             
         Returns:
-            True if successful, False otherwise
+            True if saved successfully, False otherwise
         """
         try:
-            with open(self.data_file, 'w', encoding='utf-8') as f:
+            # Create backup of existing file
+            data_path = Path(self.data_file)
+            if data_path.exists():
+                backup_path = data_path.with_suffix(f'.backup_{int(time.time())}.json')
+                shutil.copy2(data_path, backup_path)
+                logger.info(f"Created backup: {backup_path.name}")
+            
+            # Save updated data
+            with open(data_path, 'w', encoding='utf-8') as f:
                 json.dump(news_data, f, ensure_ascii=False, indent=2)
             
             logger.info(f"Successfully saved updated news data to {self.data_file}")
@@ -307,10 +427,10 @@ class TrendSiamImageGenerator:
         """
         return f"image_{index}.png"
 
-    def delete_existing_image_files(self) -> None:
+    def force_delete_existing_images(self) -> None:
         """
-        Delete all existing AI-generated image files before creating new ones.
-        This ensures no stale images remain from previous generations.
+        FORCE delete all existing AI-generated image files to ensure fresh generation.
+        This is more aggressive than the previous version to guarantee new images.
         """
         try:
             deleted_count = 0
@@ -319,28 +439,44 @@ class TrendSiamImageGenerator:
             for i in range(1, 11):  # Check up to 10 possible images
                 image_path = self.images_dir / self.get_image_filename(i)
                 if image_path.exists():
-                    image_path.unlink()
-                    logger.info(f"🗑️ Deleted existing image: {image_path.name}")
-                    deleted_count += 1
+                    try:
+                        image_path.unlink()
+                        logger.info(f"🗑️ Force deleted: {image_path.name}")
+                        deleted_count += 1
+                    except PermissionError:
+                        # Try alternative deletion methods on Windows
+                        try:
+                            os.remove(str(image_path))
+                            logger.info(f"🗑️ Force deleted (alt method): {image_path.name}")
+                            deleted_count += 1
+                        except Exception as e:
+                            logger.warning(f"Could not delete {image_path.name}: {e}")
             
             # Also check for any other .png files in the directory
-            for image_file in self.images_dir.glob("*.png"):
-                if image_file.name.startswith("image_"):
-                    image_file.unlink()
-                    logger.info(f"🗑️ Deleted existing image: {image_file.name}")
-                    deleted_count += 1
+            if self.images_dir.exists():
+                for image_file in self.images_dir.glob("*.png"):
+                    if image_file.name.startswith("image_"):
+                        try:
+                            image_file.unlink()
+                            logger.info(f"🗑️ Force deleted: {image_file.name}")
+                            deleted_count += 1
+                        except Exception as e:
+                            logger.warning(f"Could not delete {image_file.name}: {e}")
             
             if deleted_count > 0:
-                logger.info(f"✅ Deleted {deleted_count} existing image files")
+                logger.info(f"✅ Force deleted {deleted_count} existing image files")
             else:
                 logger.info("ℹ️ No existing image files to delete")
                 
+            # Small delay to ensure filesystem is ready
+            time.sleep(0.5)
+                
         except Exception as e:
-            logger.error(f"Error deleting existing image files: {e}")
+            logger.error(f"Error force deleting existing image files: {e}")
 
     def download_and_save_image(self, image_url: str, filename: str) -> Optional[str]:
         """
-        Download image from URL and save it locally.
+        Download image from URL and save it locally with improved error handling.
         
         Args:
             image_url: URL of the image to download
@@ -350,17 +486,45 @@ class TrendSiamImageGenerator:
             Local file path if successful, None otherwise
         """
         try:
-            # Download the image
-            response = requests.get(image_url, timeout=30)
-            response.raise_for_status()
+            logger.info(f"📥 Downloading image: {filename}")
             
-            # Save to local file
+            # Download the image with timeout and retries
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(image_url, timeout=30)
+                    response.raise_for_status()
+                    break
+                except requests.RequestException as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Download attempt {attempt + 1} failed, retrying: {e}")
+                        time.sleep(2)
+                        continue
+                    else:
+                        raise
+            
+            # Validate image content
+            if len(response.content) < 1024:  # At least 1KB
+                logger.error(f"Downloaded image too small: {len(response.content)} bytes")
+                return None
+            
+            # Save to local file with error handling
             local_path = self.images_dir / filename
+            
+            # Ensure directory exists
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write file
             with open(local_path, 'wb') as f:
                 f.write(response.content)
             
-            logger.info(f"💾 Downloaded and saved image: {filename}")
-            return str(local_path)
+            # Verify file was written correctly
+            if local_path.exists() and local_path.stat().st_size > 1024:
+                logger.info(f"💾 Successfully saved image: {filename} ({local_path.stat().st_size} bytes)")
+                return str(local_path)
+            else:
+                logger.error(f"Failed to save image properly: {filename}")
+                return None
             
         except requests.RequestException as e:
             logger.error(f"Failed to download image from {image_url}: {e}")
@@ -371,7 +535,7 @@ class TrendSiamImageGenerator:
 
     def generate_image_with_dalle(self, prompt: str, size: Literal["1024x1024", "1792x1024", "1024x1792", "1536x1024", "1024x1536", "256x256", "512x512"] = "1024x1024") -> Optional[str]:
         """
-        Generate an image using OpenAI DALL-E API.
+        Generate an image using OpenAI DALL-E API with enhanced error handling.
         
         Args:
             prompt: Text prompt for image generation
@@ -381,14 +545,25 @@ class TrendSiamImageGenerator:
             Image URL if successful, None otherwise
         """
         try:
-            # Truncate prompt for logging while preserving full prompt for generation
-            log_prompt = prompt[:100] + "..." if len(prompt) > 100 else prompt
-            logger.info(f"Generating image with DALL-E 3. Prompt: {log_prompt}")
-            logger.info(f"Image size: {size}, Quality: standard")
+            # Validate and sanitize prompt
+            if not prompt or not prompt.strip():
+                logger.error("Empty prompt provided")
+                return None
             
+            clean_prompt = sanitize_prompt_text(prompt)
+            if len(clean_prompt) < 10:
+                logger.error("Prompt too short after sanitization")
+                return None
+            
+            # Truncate prompt for logging while preserving full prompt for generation
+            log_prompt = clean_prompt[:100] + "..." if len(clean_prompt) > 100 else clean_prompt
+            logger.info(f"🎨 Generating image with DALL-E 3. Prompt: {log_prompt}")
+            logger.info(f"📐 Image size: {size}, Quality: standard")
+            
+            # Make API call with proper error handling
             response = self.client.images.generate(
                 model="dall-e-3",
-                prompt=prompt,
+                prompt=clean_prompt,
                 size=size,
                 quality="standard",
                 n=1,
@@ -396,7 +571,7 @@ class TrendSiamImageGenerator:
             
             if response.data and len(response.data) > 0:
                 image_url = response.data[0].url
-                logger.info(f"Successfully generated image: {image_url}")
+                logger.info(f"✅ Successfully generated image: {image_url[:60]}...")
                 return image_url
             else:
                 logger.error("No image data returned from DALL-E API")
@@ -428,136 +603,181 @@ class TrendSiamImageGenerator:
         Returns:
             List of top 3 news items by popularity
         """
-        # Filter news items that have popularity scores
-        scored_news = [
-            item for item in news_data 
-            if item.get('popularity_score') is not None
-        ]
-        
-        if not scored_news:
-            # Fallback to first 3 items if no popularity scores
-            logger.warning("No popularity scores found, using first 3 news items")
-            return news_data[:3]
-        
-        # Sort by popularity score (descending)
-        sorted_news = sorted(
-            scored_news, 
-            key=lambda x: int(x.get('popularity_score', 0)), 
-            reverse=True
-        )
-        
-        top3 = sorted_news[:3]
-        logger.info(f"Selected top 3 news items with popularity scores: {[item.get('popularity_score') for item in top3]}")
-        
-        return top3
+        try:
+            # Filter news items that have popularity scores
+            scored_news = [
+                item for item in news_data 
+                if get_precise_score(item) > 0
+            ]
+            
+            if not scored_news:
+                # Fallback to first 3 items if no popularity scores
+                logger.warning("No popularity scores found, using first 3 news items")
+                return news_data[:3] if len(news_data) >= 3 else news_data
+            
+            # Sort by precise popularity score (descending)
+            sorted_news = sorted(
+                scored_news, 
+                key=lambda x: get_precise_score(x), 
+                reverse=True
+            )
+            
+            top3 = sorted_news[:3]
+            scores = [get_precise_score(item) for item in top3]
+            logger.info(f"Selected top 3 news items with popularity scores: {scores}")
+            
+            return top3
+            
+        except Exception as e:
+            logger.error(f"Error getting top 3 news: {e}")
+            return news_data[:3] if len(news_data) >= 3 else news_data
 
     def generate_ai_images_for_top3_news(self) -> Dict[str, Any]:
         """
-        Generate AI images for the top 3 most popular news items.
-        Automatically deletes existing image files before generating new ones.
+        ENHANCED: Generate AI images for the top 3 most popular news items.
+        ALWAYS generates new images by force deleting existing ones first.
+        Improved error handling and logging.
         
         Returns:
             Dictionary containing success status, message, and processed items count
         """
-        logger.info("Starting AI image generation for top 3 news items...")
+        logger.info("🚀 Starting ENHANCED AI image generation for top 3 news items...")
         
-        # Delete existing image files first to ensure fresh generation
-        logger.info("🗑️ Cleaning up existing image files...")
-        self.delete_existing_image_files()
-        
-        # Load news data
-        news_data = self.load_news_data()
-        if not news_data:
-            return {
-                "success": False,
-                "message": "Failed to load news data",
-                "processed": 0
-            }
-        
-        # Get top 3 news items
-        top3_news = self.get_top3_news_by_popularity(news_data)
-        if not top3_news:
-            return {
-                "success": False,
-                "message": "No news items found for processing",
-                "processed": 0
-            }
-        
-        processed_count = 0
-        successful_generations = 0
-        
-        # Generate images for each top news item
-        for i, news_item in enumerate(top3_news):
-            try:
-                news_title = news_item.get('title', 'Untitled')
-                news_category = news_item.get('auto_category', 'Unknown')
-                news_popularity = news_item.get('popularity_score', 'No score')
-                
-                logger.info(f"\n--- Processing Item {i+1}/3 ---")
-                logger.info(f"Title: {news_title[:60]}...")
-                logger.info(f"Category: {news_category}")
-                logger.info(f"Popularity: {news_popularity}")
-                
-                # Generate content-specific illustration prompt
-                prompt = self.generate_editorial_illustration_prompt(news_item)
-                logger.info(f"Generated prompt length: {len(prompt)} characters")
-                
-                # Generate image with DALL-E (using 1024x1024 for better web display)
-                image_url = self.generate_image_with_dalle(prompt, size="1024x1024")
-                
-                if image_url:
-                    # Generate consistent filename for this news item
-                    filename = self.get_image_filename(i + 1)
-                    
-                    # Download and save image locally
-                    local_path = self.download_and_save_image(image_url, filename)
-                    
-                    # Find the original item in news_data and update it
-                    for original_item in news_data:
-                        if original_item.get('title') == news_title:
-                            original_item['ai_image_url'] = image_url  # Keep original URL
-                            original_item['ai_image_local'] = local_path  # Add local path
-                            original_item['ai_image_prompt'] = prompt
-                            logger.info(f"✓ Updated news item with AI image URL and local path")
-                            break
-                    
-                    successful_generations += 1
-                    logger.info(f"✅ Successfully generated and saved image {i+1}/3 as {filename}")
-                else:
-                    logger.error(f"❌ Failed to generate image {i+1}/3")
-                
-                processed_count += 1
-                
-                # Add delay between API calls to respect rate limits (2-3 seconds)
-                if i < len(top3_news) - 1:  # Don't delay after the last item
-                    logger.info("⏳ Waiting 3 seconds before next generation...")
-                    time.sleep(3)
-                    
-            except Exception as e:
-                logger.error(f"❌ Error processing news item {i+1}: {str(e)}")
-                processed_count += 1
-        
-        # Save updated news data
-        if successful_generations > 0:
-            save_success = self.save_news_data(news_data)
-            if not save_success:
+        try:
+            # FORCE delete existing image files first to ensure fresh generation
+            logger.info("🗑️ Force cleaning up existing image files...")
+            self.force_delete_existing_images()
+            
+            # Load news data
+            news_data = self.load_news_data()
+            if not news_data:
                 return {
                     "success": False,
-                    "message": f"Generated {successful_generations} images but failed to save data",
-                    "processed": processed_count
+                    "message": "Failed to load news data",
+                    "processed": 0
                 }
-        
-        return {
-            "success": successful_generations > 0,
-            "message": f"Successfully generated {successful_generations}/{processed_count} AI images for top news items",
-            "processed": processed_count,
-            "successful": successful_generations
-        }
+            
+            # Get top 3 news items
+            top3_news = self.get_top3_news_by_popularity(news_data)
+            if not top3_news:
+                return {
+                    "success": False,
+                    "message": "No news items found for processing",
+                    "processed": 0
+                }
+            
+            logger.info(f"📊 Processing {len(top3_news)} top news items for image generation")
+            
+            processed_count = 0
+            successful_generations = 0
+            errors = []
+            
+            # Generate images for each top news item
+            for i, news_item in enumerate(top3_news):
+                try:
+                    item_number = i + 1
+                    news_title = news_item.get('title', 'Untitled')
+                    news_category = news_item.get('auto_category', 'Unknown')
+                    news_popularity = get_precise_score(news_item)
+                    
+                    logger.info(f"\n=== Processing Item {item_number}/3 ===")
+                    logger.info(f"📰 Title: {news_title[:60]}...")
+                    logger.info(f"🏷️ Category: {news_category}")
+                    logger.info(f"⭐ Popularity: {news_popularity:.1f}")
+                    
+                    # Generate enhanced content-specific illustration prompt
+                    prompt = self.generate_enhanced_editorial_prompt(news_item)
+                    logger.info(f"📝 Generated prompt length: {len(prompt)} characters")
+                    
+                    # ALWAYS generate new image (no existence check)
+                    logger.info(f"🎨 Generating NEW image {item_number}/3...")
+                    image_url = self.generate_image_with_dalle(prompt, size="1024x1024")
+                    
+                    if image_url:
+                        # Generate consistent filename for this news item
+                        filename = self.get_image_filename(item_number)
+                        
+                        # Download and save image locally
+                        local_path = self.download_and_save_image(image_url, filename)
+                        
+                        if local_path:
+                            # Find the original item in news_data and update it
+                            updated = False
+                            for original_item in news_data:
+                                if original_item.get('title') == news_title:
+                                    original_item['ai_image_url'] = image_url  # Keep original URL
+                                    original_item['ai_image_local'] = local_path  # Add local path
+                                    original_item['ai_image_prompt'] = prompt
+                                    logger.info(f"✅ Updated news item with NEW AI image data")
+                                    updated = True
+                                    break
+                            
+                            if updated:
+                                successful_generations += 1
+                                logger.info(f"🎉 Successfully generated and saved NEW image {item_number}/3 as {filename}")
+                            else:
+                                logger.warning(f"Could not find original news item to update")
+                        else:
+                            logger.error(f"❌ Failed to save image {item_number}/3 locally")
+                            errors.append(f"Image {item_number}: Download failed")
+                    else:
+                        logger.error(f"❌ Failed to generate image {item_number}/3")
+                        errors.append(f"Image {item_number}: Generation failed")
+                    
+                    processed_count += 1
+                    
+                    # Add delay between API calls to respect rate limits
+                    if i < len(top3_news) - 1:  # Don't delay after the last item
+                        logger.info("⏳ Waiting 3 seconds before next generation...")
+                        time.sleep(3)
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error processing news item {item_number}: {str(e)}")
+                    errors.append(f"Item {item_number}: {str(e)[:50]}")
+                    processed_count += 1
+            
+            # Save updated news data
+            if successful_generations > 0:
+                logger.info("💾 Saving updated news data...")
+                save_success = self.save_news_data(news_data)
+                if not save_success:
+                    return {
+                        "success": False,
+                        "message": f"Generated {successful_generations} images but failed to save data",
+                        "processed": processed_count,
+                        "errors": errors
+                    }
+            
+            # Prepare result
+            result = {
+                "success": successful_generations > 0,
+                "message": f"Successfully generated {successful_generations}/{processed_count} NEW AI images for top news items",
+                "processed": processed_count,
+                "successful": successful_generations,
+                "errors": errors
+            }
+            
+            if successful_generations > 0:
+                logger.info(f"🎉 ENHANCED generation completed: {successful_generations}/{processed_count} successful")
+            else:
+                logger.error(f"😞 No images were generated successfully")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"💥 Critical error in enhanced image generation: {e}")
+            return {
+                "success": False,
+                "message": f"Critical error: {str(e)}",
+                "processed": 0,
+                "errors": [str(e)]
+            }
 
 
 def generate_ai_images_for_top3_news(api_key: Optional[str] = None) -> Dict[str, Any]:
     """
-    Convenience function to generate AI images for top 3 news items.
+    ENHANCED convenience function to generate AI images for top 3 news items.
+    Always generates new images with improved error handling.
     
     Args:
         api_key: OpenAI API key. If None, will try to get from environment.
@@ -572,8 +792,9 @@ def generate_ai_images_for_top3_news(api_key: Optional[str] = None) -> Dict[str,
         logger.error(f"Error in generate_ai_images_for_top3_news: {e}")
         return {
             "success": False,
-            "message": f"Error: {str(e)}",
-            "processed": 0
+            "message": f"Initialization error: {str(e)}",
+            "processed": 0,
+            "errors": [str(e)]
         }
 
 
@@ -584,7 +805,7 @@ if __name__ == "__main__":
     # Check if API key is provided as command line argument
     api_key = sys.argv[1] if len(sys.argv) > 1 else None
     
-    print("🎨 TrendSiam AI Image Generator")
+    print("🎨 TrendSiam ENHANCED AI Image Generator")
     print("=" * 50)
     
     # Generate images
@@ -593,10 +814,16 @@ if __name__ == "__main__":
     print(f"Success: {result['success']}")
     print(f"Message: {result['message']}")
     print(f"Processed: {result.get('processed', 0)} items")
+    print(f"Successful: {result.get('successful', 0)} items")
+    
+    if result.get('errors'):
+        print(f"Errors: {len(result['errors'])}")
+        for error in result['errors']:
+            print(f"  - {error}")
     
     if result['success']:
-        print("✅ AI images generated successfully!")
-        print("Images will now appear in the TrendSiam app.")
+        print("✅ Enhanced AI images generated successfully!")
+        print("🖼️ NEW images will now appear in the TrendSiam app.")
     else:
         print("❌ Failed to generate AI images.")
-        print("Check your OpenAI API key and internet connection.") 
+        print("🔧 Check your OpenAI API key and internet connection.") 

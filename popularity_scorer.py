@@ -81,22 +81,40 @@ class PopularityScorer:
         likes_ratio = likes / views
         comments_ratio = comments / views
         
-        # Score engagement ratios
-        likes_score = 0
+        # Score engagement ratios with enhanced precision
+        likes_score = 0.0
         if likes_ratio >= self.engagement_thresholds['high_likes_ratio']:
-            likes_score = 30
+            # Add precision bonus for exceptionally high like ratios
+            extra_ratio = likes_ratio - self.engagement_thresholds['high_likes_ratio']
+            precision_bonus = min(extra_ratio * 10000, 5.0)  # Up to 5 extra points
+            likes_score = min(30.0 + precision_bonus, 35.0)
         elif likes_ratio >= self.engagement_thresholds['medium_likes_ratio']:
-            likes_score = 20
+            # Interpolate between medium (20) and high (30) thresholds
+            medium_threshold = self.engagement_thresholds['medium_likes_ratio']
+            high_threshold = self.engagement_thresholds['high_likes_ratio']
+            progress = (likes_ratio - medium_threshold) / (high_threshold - medium_threshold)
+            likes_score = 20.0 + (progress * 10.0)
         elif likes_ratio > 0:
-            likes_score = 10
+            # Interpolate between 10 and 20 based on ratio relative to medium threshold
+            progress = min(likes_ratio / self.engagement_thresholds['medium_likes_ratio'], 1.0)
+            likes_score = 10.0 + (progress * 10.0)
         
-        comments_score = 0
+        comments_score = 0.0
         if comments_ratio >= self.engagement_thresholds['high_comments_ratio']:
-            comments_score = 20
+            # Add precision bonus for exceptionally high comment ratios
+            extra_ratio = comments_ratio - self.engagement_thresholds['high_comments_ratio']
+            precision_bonus = min(extra_ratio * 50000, 3.0)  # Up to 3 extra points
+            comments_score = min(20.0 + precision_bonus, 23.0)
         elif comments_ratio >= self.engagement_thresholds['medium_comments_ratio']:
-            comments_score = 15
+            # Interpolate between medium (15) and high (20) thresholds
+            medium_threshold = self.engagement_thresholds['medium_comments_ratio']
+            high_threshold = self.engagement_thresholds['high_comments_ratio']
+            progress = (comments_ratio - medium_threshold) / (high_threshold - medium_threshold)
+            comments_score = 15.0 + (progress * 5.0)
         elif comments_ratio > 0:
-            comments_score = 10
+            # Interpolate between 10 and 15 based on ratio relative to medium threshold
+            progress = min(comments_ratio / self.engagement_thresholds['medium_comments_ratio'], 1.0)
+            comments_score = 10.0 + (progress * 5.0)
         
         return {
             'likes_ratio': likes_ratio,
@@ -104,28 +122,41 @@ class PopularityScorer:
             'engagement_score': likes_score + comments_score
         }
     
-    def calculate_views_score(self, views: int) -> int:
+    def calculate_views_score(self, views: int) -> float:
         """
-        Calculate score based on view count.
+        Calculate score based on view count with enhanced precision.
         
         Args:
             views: Number of views
             
         Returns:
-            int: Views score (0-30)
+            float: Views score (0-30) with decimal precision for better ranking
         """
         if views >= self.engagement_thresholds['high_views']:
-            return 30
+            # Add precision based on how much above the high threshold
+            extra_views = views - self.engagement_thresholds['high_views']
+            precision_bonus = min(extra_views / 1_000_000, 5.0)  # Up to 5 extra points for very high views
+            return min(30.0 + precision_bonus, 35.0)
         elif views >= self.engagement_thresholds['medium_views']:
-            return 20
+            # Interpolate between medium (20) and high (30) thresholds
+            medium_threshold = self.engagement_thresholds['medium_views']
+            high_threshold = self.engagement_thresholds['high_views']
+            progress = (views - medium_threshold) / (high_threshold - medium_threshold)
+            return 20.0 + (progress * 10.0)
         elif views >= 10_000:
-            return 15
+            # Interpolate between 15 and 20
+            progress = (views - 10_000) / (self.engagement_thresholds['medium_views'] - 10_000)
+            return 15.0 + (progress * 5.0)
         elif views >= 1_000:
-            return 10
+            # Interpolate between 10 and 15
+            progress = (views - 1_000) / (10_000 - 1_000)
+            return 10.0 + (progress * 5.0)
         elif views > 0:
-            return 5
+            # Interpolate between 5 and 10
+            progress = min(views / 1_000, 1.0)
+            return 5.0 + (progress * 5.0)
         else:
-            return 0
+            return 0.0
     
     def calculate_viral_keywords_score(self, title: str, description: str) -> Dict[str, Any]:
         """
@@ -140,35 +171,54 @@ class PopularityScorer:
         """
         text = f"{title} {description}".lower()
         
-        keyword_score = 0
+        keyword_score = 0.0
         found_keywords = []
+        keyword_count_by_category = {}
         
         for category, keywords in self.viral_keywords.items():
+            category_matches = 0
             for keyword in keywords:
                 if keyword.lower() in text:
                     found_keywords.append(keyword)
+                    category_matches += 1
                     
-                    # Different categories have different weight
+                    # Base weight for different categories
+                    base_weight = 0
                     if category == 'live_urgent':
-                        keyword_score += 8
+                        base_weight = 8.0
                     elif category == 'celebrities':
-                        keyword_score += 6
+                        base_weight = 6.0
                     elif category == 'social_platforms':
-                        keyword_score += 4
+                        base_weight = 4.0
                     elif category == 'emotional_hooks':
-                        keyword_score += 3
+                        base_weight = 3.0
                     elif category == 'exclusive':
-                        keyword_score += 5
+                        base_weight = 5.0
+                    
+                    # Add precision: slight boost for keyword position in title vs description
+                    position_bonus = 0.0
+                    if keyword.lower() in title.lower():
+                        position_bonus = base_weight * 0.1  # 10% bonus for title keywords
+                    
+                    keyword_score += base_weight + position_bonus
+            
+            keyword_count_by_category[category] = category_matches
         
-        # Cap keyword score at 20
-        keyword_score = min(keyword_score, 20)
+        # Add diversity bonus: slight bonus for having keywords from multiple categories
+        active_categories = sum(1 for count in keyword_count_by_category.values() if count > 0)
+        if active_categories > 1:
+            diversity_bonus = min(active_categories * 0.5, 2.0)  # Up to 2 extra points
+            keyword_score += diversity_bonus
+        
+        # Cap keyword score at 22 (allowing for bonuses)
+        keyword_score = min(keyword_score, 22.0)
         
         return {
             'keyword_score': keyword_score,
             'found_keywords': found_keywords
         }
     
-    def analyze_video(self, title: str, description: str = "", views: Union[str, int] = 0, 
+    def analyze_video(self, video_data: Dict[str, Any], title: str, description: str = "", views: Union[str, int] = 0,
                      likes: Union[str, int] = 0, comments: Union[str, int] = 0) -> Dict[str, Any]:
         """
         Analyze video metadata and assign popularity score.
@@ -193,37 +243,36 @@ class PopularityScorer:
         engagement_metrics = self.calculate_engagement_score(views_count, likes_count, comments_count)
         keyword_analysis = self.calculate_viral_keywords_score(title, description or "")
         
-        # Calculate total score (max 100)
-        total_score = (
-            views_score +  # Max 30
-            engagement_metrics['engagement_score'] +  # Max 50
-            keyword_analysis['keyword_score']  # Max 20
+        # Calculate total score with enhanced precision (max ~110 with bonuses)
+        total_score_precise = (
+            views_score +  # Max ~35 (with bonuses)
+            engagement_metrics['engagement_score'] +  # Max ~58 (with bonuses)
+            keyword_analysis['keyword_score']  # Max ~22 (with bonuses)
         )
         
-        # Generate reason
-        reason_parts = []
+        # Cap at 100 for display but keep internal precision for ranking
+        total_score_display = min(total_score_precise, 100.0)
         
-        if views_count >= 1_000_000:
-            reason_parts.append("high views")
-        elif views_count >= 100_000:
-            reason_parts.append("good views")
+        # Keep internal precision for better ranking (capped at 110)
+        total_score_internal = min(total_score_precise, 110.0)
         
-        if engagement_metrics['likes_ratio'] >= 0.02:
-            reason_parts.append("strong engagement")
-        elif engagement_metrics['likes_ratio'] > 0:
-            reason_parts.append("moderate engagement")
+        # Generate enhanced reason using detailed analysis
+        reason = self._generate_detailed_reason(
+            video_data, views_count, likes_count, comments_count,
+            engagement_metrics, keyword_analysis, total_score_display
+        )
         
-        if keyword_analysis['found_keywords']:
-            reason_parts.append(f"viral keywords ({', '.join(keyword_analysis['found_keywords'][:2])})")
-        
-        if not reason_parts:
-            reason = "Low engagement and limited viral indicators"
-        else:
-            reason = f"High popularity due to {', '.join(reason_parts)}"
+        # Generate structured view details for UI (use precise score for better accuracy)
+        view_details = self._generate_view_details(
+            video_data, views_count, likes_count, comments_count,
+            engagement_metrics, keyword_analysis, total_score_internal
+        )
         
         return {
-            'popularity_score': min(total_score, 100),
+            'popularity_score': int(total_score_display),  # Integer for display compatibility
+            'popularity_score_precise': total_score_internal,  # Float for precise ranking
             'reason': reason,
+            'view_details': view_details,
             'analysis': {
                 'views': views_count,
                 'likes': likes_count,
@@ -237,26 +286,485 @@ class PopularityScorer:
             }
         }
     
-    def score_video_simple(self, title: str, description: str = "", views: Union[str, int] = 0, 
+    def _generate_detailed_reason(
+        self, 
+        video_data: Dict[str, Any], 
+        views_count: int, 
+        likes_count: int, 
+        comments_count: int,
+        engagement_metrics: Dict[str, Any], 
+        keyword_analysis: Dict[str, Any], 
+        total_score: int
+    ) -> str:
+        """
+        Generate detailed, rule-based explanation for popularity score.
+        
+        Args:
+            video_data: Original video metadata
+            views_count: Parsed view count
+            likes_count: Parsed like count  
+            comments_count: Parsed comment count
+            engagement_metrics: Calculated engagement data
+            keyword_analysis: Viral keyword analysis
+            total_score: Final popularity score
+            
+        Returns:
+            str: Detailed explanation (1-3 sentences)
+        """
+        
+        # Extract additional metadata
+        title = video_data.get('title', '')
+        category = video_data.get('category', 'Unknown')
+        channel = video_data.get('channel', '')
+        
+        # Calculate engagement rates for more specific analysis
+        likes_ratio = engagement_metrics.get('likes_ratio', 0)
+        comments_ratio = engagement_metrics.get('comments_ratio', 0)
+        
+        reason_parts = []
+        
+        # 1. Analyze view performance with context
+        if views_count >= 10_000_000:
+            reason_parts.append(f"exceptional viral reach ({self._format_count(views_count)} views)")
+        elif views_count >= 5_000_000:
+            reason_parts.append(f"massive audience engagement ({self._format_count(views_count)} views)")
+        elif views_count >= 1_000_000:
+            reason_parts.append(f"strong viewership ({self._format_count(views_count)} views)")
+        elif views_count >= 500_000:
+            reason_parts.append(f"solid view performance ({self._format_count(views_count)} views)")
+        elif views_count >= 100_000:
+            reason_parts.append(f"moderate reach ({self._format_count(views_count)} views)")
+        elif views_count >= 10_000:
+            reason_parts.append(f"growing audience ({self._format_count(views_count)} views)")
+        
+        # 2. Analyze engagement quality with specific metrics
+        if likes_ratio >= 0.05:  # 5%+
+            reason_parts.append(f"outstanding engagement ({likes_ratio*100:.1f}% like rate)")
+        elif likes_ratio >= 0.03:  # 3%+
+            reason_parts.append(f"strong audience approval ({likes_ratio*100:.1f}% like rate)")
+        elif likes_ratio >= 0.015:  # 1.5%+
+            reason_parts.append(f"positive engagement ({likes_ratio*100:.1f}% like rate)")
+        elif likes_ratio > 0:
+            reason_parts.append(f"basic engagement ({likes_ratio*100:.2f}% like rate)")
+        
+        # 3. Comment engagement analysis
+        if comments_ratio >= 0.01:  # 1%+
+            reason_parts.append(f"high discussion activity ({comments_ratio*100:.2f}% comment rate)")
+        elif comments_ratio >= 0.005:  # 0.5%+
+            reason_parts.append("active community discussion")
+        
+        # 4. Content-specific viral factors
+        viral_factors = []
+        if keyword_analysis.get('found_keywords'):
+            keywords = keyword_analysis['found_keywords'][:3]  # Top 3 keywords
+            
+            # Categorize viral factors
+            live_keywords = [k for k in keywords if k.lower() in ['🔴', 'live', 'ด่วน', 'breaking']]
+            celebrity_keywords = [k for k in keywords if k.lower() in ['blackpink', 'bts', 'twice', 'taylor swift']]
+            platform_keywords = [k for k in keywords if k.lower() in ['tiktok', 'viral', 'trend', 'shorts']]
+            
+            if live_keywords:
+                viral_factors.append(f"live/urgent content ({', '.join(live_keywords[:2])})")
+            if celebrity_keywords:
+                viral_factors.append(f"celebrity appeal ({', '.join(celebrity_keywords[:2])})")  
+            if platform_keywords:
+                viral_factors.append(f"platform trends ({', '.join(platform_keywords[:2])})")
+            
+            # Add other viral keywords if space allows
+            other_keywords = [k for k in keywords if k not in live_keywords + celebrity_keywords + platform_keywords]
+            if other_keywords and len(viral_factors) < 2:
+                viral_factors.append(f"viral keywords ({', '.join(other_keywords[:2])})")
+        
+        # 5. Category-specific analysis
+        category_context = ""
+        if category.lower() in ['entertainment', 'music']:
+            category_context = "entertainment content"
+        elif category.lower() in ['sports', 'gaming']:
+            category_context = f"{category.lower()} content"
+        elif category.lower() in ['news', 'politics']:
+            category_context = "news/current events"
+        
+        # 6. Build final explanation based on score level
+        if total_score >= 80:
+            prefix = "Viral performance driven by"
+        elif total_score >= 60:
+            prefix = "High popularity achieved through"
+        elif total_score >= 40:
+            prefix = "Moderate popularity from"
+        elif total_score >= 20:
+            prefix = "Limited popularity due to"
+        else:
+            prefix = "Low engagement with"
+        
+        # Combine all analysis parts
+        all_factors = reason_parts + viral_factors
+        
+        # Create 1-3 sentence explanation
+        if len(all_factors) == 0:
+            return f"{prefix} minimal metrics and basic {category_context or 'content'}."
+        elif len(all_factors) <= 2:
+            main_reason = f"{prefix} {' and '.join(all_factors)}"
+            if category_context:
+                return f"{main_reason} in {category_context}."
+            return f"{main_reason}."
+        else:
+            # Split into 2 sentences for longer explanations
+            primary_factors = all_factors[:2]
+            secondary_factors = all_factors[2:]
+            
+            sentence1 = f"{prefix} {' and '.join(primary_factors)}."
+            
+            if secondary_factors:
+                sentence2 = f"Additional boost from {', '.join(secondary_factors)}."
+                if category_context:
+                    sentence2 = f"Additional boost from {', '.join(secondary_factors)} in {category_context}."
+                return f"{sentence1} {sentence2}"
+            
+            return sentence1
+    
+    def _format_count(self, count: int) -> str:
+        """
+        Format large numbers in human-readable format.
+        
+        Args:
+            count: Number to format
+            
+        Returns:
+            str: Formatted number (e.g., "1.2M", "500K")
+        """
+        
+        if count >= 1_000_000:
+            return f"{count/1_000_000:.1f}M"
+        elif count >= 1_000:
+            return f"{count/1_000:.0f}K"
+        else:
+            return str(count)
+
+    def _generate_view_details(
+        self, 
+        video_data: Dict[str, Any], 
+        views_count: int, 
+        likes_count: int, 
+        comments_count: int,
+        engagement_metrics: Dict[str, Any], 
+        keyword_analysis: Dict[str, Any], 
+        total_score: int
+    ) -> Dict[str, Any]:
+        """
+        Generate structured view details for UI display.
+        
+        Args:
+            video_data: Original video metadata
+            views_count: Parsed view count
+            likes_count: Parsed like count  
+            comments_count: Parsed comment count
+            engagement_metrics: Calculated engagement data
+            keyword_analysis: Viral keyword analysis
+            total_score: Final popularity score (precise, with decimal places)
+            
+        Returns:
+            Dict: Structured view details for UI
+        """
+        
+        # Extract metadata
+        title = video_data.get('title', '')
+        description = video_data.get('description', '')
+        channel = video_data.get('channel', '')
+        published_date = video_data.get('published_date', '')
+        category = video_data.get('category', 'Unknown')
+        
+        # 1. Format view count
+        views_formatted = f"{self._format_count(views_count)} views"
+        
+        # 2. Estimate growth rate based on publish date and current views
+        growth_rate = self._estimate_growth_rate(views_count, published_date)
+        
+        # 3. Analyze platform mentions
+        platform_mentions = self._analyze_platform_mentions(title, description, channel)
+        
+        # 4. Format matched keywords
+        matched_keywords = self._format_matched_keywords(keyword_analysis)
+        
+        # 5. Generate audience appeal analysis
+        ai_opinion = self._generate_audience_appeal_analysis(
+            video_data, keyword_analysis, engagement_metrics, category
+        )
+        
+        # 6. Format score with model info (show precise score with 1 decimal place)
+        score_formatted = f"{total_score:.1f}/100 (rule-based model)"
+        
+        return {
+            "views": views_formatted,
+            "growth_rate": growth_rate,
+            "platform_mentions": platform_mentions,
+            "matched_keywords": matched_keywords,
+            "ai_opinion": ai_opinion,
+            "score": score_formatted
+        }
+
+    def _estimate_growth_rate(self, views_count: int, published_date: str) -> str:
+        """
+        Estimate view growth rate based on publish date and current views.
+        
+        Args:
+            views_count: Current view count
+            published_date: Video publish date string
+            
+        Returns:
+            str: Growth rate estimate
+        """
+        try:
+            from datetime import datetime, timezone
+            import re
+            
+            # Parse published date (format: "2025-07-13 22:52:52 UTC")
+            if published_date and "UTC" in published_date:
+                date_str = published_date.replace(" UTC", "")
+                pub_date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+                pub_date = pub_date.replace(tzinfo=timezone.utc)
+                now = datetime.now(timezone.utc)
+                
+                # Calculate hours since publication
+                hours_since_pub = (now - pub_date).total_seconds() / 3600
+                
+                if hours_since_pub <= 0:
+                    return "Just published"
+                elif hours_since_pub <= 24:
+                    # Views per hour for recent content
+                    views_per_hour = views_count / hours_since_pub
+                    daily_estimate = views_per_hour * 24
+                    return f"+{self._format_count(int(daily_estimate))} estimated in 24hr"
+                elif hours_since_pub <= 168:  # Within a week
+                    # Average daily views
+                    days_since_pub = hours_since_pub / 24
+                    daily_avg = views_count / days_since_pub
+                    return f"~{self._format_count(int(daily_avg))} avg/day"
+                else:
+                    # Older content - weekly average
+                    weeks_since_pub = hours_since_pub / (24 * 7)
+                    weekly_avg = views_count / weeks_since_pub
+                    return f"~{self._format_count(int(weekly_avg))} avg/week"
+            else:
+                # Fallback for unknown dates
+                if views_count >= 10_000_000:
+                    return "Viral growth pattern"
+                elif views_count >= 1_000_000:
+                    return "Strong growth trend"
+                elif views_count >= 100_000:
+                    return "Steady growth pattern"
+                else:
+                    return "Moderate growth rate"
+                    
+        except Exception:
+            # Fallback on error
+            return "Growth rate unknown"
+
+    def _analyze_platform_mentions(self, title: str, description: str, channel: str) -> str:
+        """
+        Analyze platform mentions in content.
+        
+        Args:
+            title: Video title
+            description: Video description  
+            channel: Channel name
+            
+        Returns:
+            str: Platform mentions summary
+        """
+        text = f"{title} {description} {channel}".lower()
+        
+        platforms = {
+            'youtube': ['youtube', 'yt'],
+            'tiktok': ['tiktok', 'tik tok'],
+            'facebook': ['facebook', 'fb'],
+            'instagram': ['instagram', 'ig', 'insta'],
+            'twitter': ['twitter', 'x.com'],
+            'line': ['line today', 'line tv'],
+            'thai_news': ['thairath', 'kapook', 'sanook', 'mthai', 'manager'],
+            'tv_channels': ['ch3', 'ch7', 'workpoint', 'one31', 'gmm']
+        }
+        
+        found_platforms = []
+        platform_count = 0
+        
+        for platform_type, keywords in platforms.items():
+            for keyword in keywords:
+                if keyword in text:
+                    if platform_type == 'youtube':
+                        found_platforms.append('YouTube')
+                    elif platform_type == 'tiktok':
+                        found_platforms.append('TikTok')
+                    elif platform_type == 'facebook':
+                        found_platforms.append('Facebook')
+                    elif platform_type == 'instagram':
+                        found_platforms.append('Instagram')
+                    elif platform_type == 'thai_news':
+                        platform_count += 1
+                    elif platform_type == 'tv_channels':
+                        platform_count += 1
+                    break
+        
+        # Build platform mention string
+        result_parts = []
+        if found_platforms:
+            result_parts.extend(found_platforms)
+        
+        if platform_count > 0:
+            if 'thairath' in text or 'sanook' in text or 'kapook' in text:
+                result_parts.append(f"{platform_count} Thai news outlets")
+            elif 'ch3' in text or 'ch7' in text or 'workpoint' in text:
+                result_parts.append(f"{platform_count} TV channels")
+            else:
+                result_parts.append(f"{platform_count} media outlets")
+        
+        if result_parts:
+            return " + ".join(result_parts)
+        else:
+            return "Primary platform only"
+
+    def _format_matched_keywords(self, keyword_analysis: Dict[str, Any]) -> str:
+        """
+        Format matched keywords for display.
+        
+        Args:
+            keyword_analysis: Keyword analysis results
+            
+        Returns:
+            str: Formatted keyword summary
+        """
+        found_keywords = keyword_analysis.get('found_keywords', [])
+        
+        if not found_keywords:
+            return "No viral keywords detected"
+        
+        keyword_count = len(found_keywords)
+        
+        # Show first 3 keywords as examples
+        examples = found_keywords[:3]
+        
+        if keyword_count <= 3:
+            return f"{keyword_count} keywords ({', '.join(examples)})"
+        else:
+            return f"{keyword_count} keywords (e.g., {', '.join(examples)})"
+
+    def _generate_audience_appeal_analysis(
+        self, 
+        video_data: Dict[str, Any], 
+        keyword_analysis: Dict[str, Any], 
+        engagement_metrics: Dict[str, Any],
+        category: str
+    ) -> str:
+        """
+        Generate rule-based audience appeal analysis.
+        
+        Args:
+            video_data: Original video metadata
+            keyword_analysis: Viral keyword analysis
+            engagement_metrics: Engagement metrics
+            category: Content category
+            
+        Returns:
+            str: Audience appeal analysis
+        """
+        title = video_data.get('title', '').lower()
+        description = video_data.get('description', '').lower()
+        found_keywords = keyword_analysis.get('found_keywords', [])
+        likes_ratio = engagement_metrics.get('likes_ratio', 0)
+        
+        # Analyze content characteristics
+        appeal_factors = []
+        
+        # Age group analysis
+        teen_indicators = ['tiktok', 'viral', 'challenge', 'trend', 'cute', 'funny']
+        adult_indicators = ['news', 'politics', 'business', 'analysis', 'documentary']
+        
+        if any(indicator in title + description for indicator in teen_indicators):
+            appeal_factors.append("teens and young adults")
+        elif any(indicator in title + description for indicator in adult_indicators):
+            appeal_factors.append("adult audiences")
+        
+        # Gender appeal analysis
+        female_indicators = ['blackpink', 'twice', 'bts', 'beauty', 'fashion', 'cute', 'romance']
+        male_indicators = ['football', 'gaming', 'sports', 'esport', 'tech', 'car']
+        
+        if any(indicator in title + description for indicator in female_indicators):
+            appeal_factors.append("female audiences")
+        elif any(indicator in title + description for indicator in male_indicators):
+            appeal_factors.append("male audiences")
+        
+        # Content type analysis
+        if category.lower() == 'sports':
+            appeal_factors.append("sports fans")
+        elif category.lower() == 'music':
+            appeal_factors.append("music enthusiasts")
+        elif category.lower() == 'gaming':
+            appeal_factors.append("gaming community")
+        elif category.lower() == 'news':
+            appeal_factors.append("news followers")
+        
+        # Celebrity/viral appeal
+        celebrity_keywords = ['blackpink', 'bts', 'twice', 'taylor swift']
+        if any(keyword.lower() in found_keywords for keyword in celebrity_keywords):
+            appeal_factors.append("celebrity fans")
+        
+        # Live/urgent appeal
+        if '🔴' in title or 'live' in title.lower() or 'ด่วน' in title:
+            appeal_factors.append("real-time event followers")
+        
+        # Engagement quality analysis
+        engagement_appeal = ""
+        if likes_ratio >= 0.03:
+            engagement_appeal = "due to highly engaging content"
+        elif likes_ratio >= 0.015:
+            engagement_appeal = "due to engaging storytelling"
+        elif likes_ratio > 0:
+            engagement_appeal = "due to relatable content"
+        
+        # Build final analysis
+        if appeal_factors:
+            audience_text = ", ".join(appeal_factors[:3])  # Limit to 3 factors
+            if engagement_appeal:
+                return f"Likely appeals to {audience_text} {engagement_appeal}."
+            else:
+                return f"Likely appeals to {audience_text} based on content themes."
+        else:
+            if engagement_appeal:
+                return f"Broad audience appeal {engagement_appeal}."
+            else:
+                return "General audience appeal with moderate engagement potential."
+    
+    def score_video_simple(self, video_data: Dict[str, Any] = None, title: str = "", 
+                          description: str = "", views: Union[str, int] = 0, 
                           likes: Union[str, int] = 0, comments: Union[str, int] = 0) -> Dict[str, Any]:
         """
         Simple scoring function that returns only score and reason.
         
         Args:
-            title: Video title
-            description: Video description
-            views: View count
-            likes: Like count
-            comments: Comment count
+            video_data: Full video metadata dict (preferred for enhanced reasons)
+            title: Video title (fallback if video_data not provided)
+            description: Video description (fallback)
+            views: View count (fallback)
+            likes: Like count (fallback)
+            comments: Comment count (fallback)
             
         Returns:
             Dict with popularity_score and reason only
         """
-        analysis = self.analyze_video(title, description, views, likes, comments)
+        # Use video_data if provided, otherwise use individual parameters
+        if video_data:
+            title = video_data.get('title', title)
+            description = video_data.get('description', description)
+            views = video_data.get('view_count', views)
+            likes = video_data.get('like_count', likes)
+            comments = video_data.get('comment_count', comments)
+        
+        analysis = self.analyze_video(video_data or {'title': title, 'description': description}, title, description, views, likes, comments)
         
         return {
             'popularity_score': analysis['popularity_score'],
-            'reason': analysis['reason']
+            'popularity_score_precise': analysis['popularity_score_precise'],
+            'reason': analysis['reason'],
+            'view_details': analysis['view_details']
         }
 
 
@@ -300,33 +808,28 @@ def add_popularity_scores(video_list: list) -> list:
     
     for i, video in enumerate(video_list, 1):
         try:
-            # Extract video data - handle different field name variations
-            title = video.get('title', '')
-            description = video.get('description', '')
-            views = video.get('view_count', video.get('views', 0))
-            likes = video.get('like_count', video.get('likes', 0))
-            comments = video.get('comment_count', video.get('comments', 0))
+            # Score the video using enhanced method with full video data
+            score_result = scorer.score_video_simple(video_data=video)
             
-            # Score the video
-            score_result = scorer.score_video_simple(title, description, views, likes, comments)
-            
-            # Add scores to video data
+            # Add scores and view details to video data
             updated_video = video.copy()
             updated_video['popularity_score'] = score_result['popularity_score']
+            updated_video['popularity_score_precise'] = score_result.get('popularity_score_precise', score_result['popularity_score'])
             updated_video['reason'] = score_result['reason']
+            updated_video['view_details'] = score_result['view_details']
             
             updated_videos.append(updated_video)
             
             # Progress indicator
             if i % 5 == 0 or i == len(video_list):
                 print(f"   Processed {i}/{len(video_list)} videos...")
-            
+                
         except Exception as e:
             print(f"   ⚠️ Error scoring video {i}: {str(e)}")
-            # Keep video without score if error occurs
+            # Keep original video without changes
             updated_videos.append(video)
     
-    print(f"✅ Popularity scoring complete!")
+    print("✅ Popularity scoring complete!")
     return updated_videos
 
 

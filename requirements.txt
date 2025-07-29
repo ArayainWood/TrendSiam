@@ -19,6 +19,14 @@ requests>=2.31.0,<3.0.0  # Security patches, cert validation
 urllib3>=2.0.7,<3.0.0  # Security updates, no vulnerabilities
 certifi>=2023.11.17  # Latest CA certificates
 
+# ===== PDF GENERATION =====
+
+# PyMuPDF for PDF creation with Thai language support  
+pymupdf>=1.22.5,<2.0.0  # High-performance PDF library with Unicode support (fitz)
+
+# Timezone support for professional reporting
+pytz>=2023.3  # Timezone calculations for Bangkok/ICT timestamps
+
 # ===== WEB FRAMEWORK =====
 
 # Streamlit web app (latest stable)
