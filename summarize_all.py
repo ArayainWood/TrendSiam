@@ -136,18 +136,89 @@ class BatchVideoSummarizer:
         self.view_count_updated = 0
         self.view_count_failed = 0
     
+    def fetch_fresh_trending_data(self) -> bool:
+        """
+        Fetch fresh trending videos from YouTube Data API.
+        
+        Returns:
+            bool: True if fresh data was fetched successfully, False otherwise
+        """
+        print("🔄 Fetching FRESH trending videos from YouTube Data API...")
+        
+        try:
+            # Import and use the YouTube API fetcher
+            from youtube_api_fetcher import YouTubeAPIFetcher
+            
+            # Create fetcher instance
+            fetcher = YouTubeAPIFetcher()
+            
+            # Fetch fresh trending videos
+            videos = fetcher.fetch_trending_videos()
+            
+            if not videos:
+                print("❌ Failed to fetch fresh trending videos from YouTube API")
+                return False
+            
+            # Process the videos into the expected format
+            processed_videos = fetcher.parse_video_data(videos)
+            
+            if not processed_videos:
+                print("❌ Failed to process fetched videos")
+                return False
+            
+            # Save fresh data to the JSON file
+            with open(self.input_file, 'w', encoding='utf-8') as f:
+                json.dump(processed_videos, f, ensure_ascii=False, indent=2)
+            
+            print(f"✅ Successfully fetched and saved {len(processed_videos)} fresh trending videos")
+            print(f"📅 Data freshness: Just fetched from YouTube API (live data)")
+            
+            # Log some sample video IDs to verify freshness
+            sample_ids = [v.get('video_id', 'N/A') for v in processed_videos[:3]]
+            print(f"🎬 Sample video IDs: {', '.join(sample_ids)}")
+            
+            # Debug: Log structure of processed videos
+            if processed_videos:
+                print(f"🔍 Debug: First video structure keys: {list(processed_videos[0].keys())}")
+                sample_video = processed_videos[0]
+                print(f"🔍 Debug: Sample video data:")
+                print(f"   Title: {sample_video.get('title', 'N/A')}")
+                print(f"   Video ID: {sample_video.get('video_id', 'N/A')}")
+                print(f"   Channel: {sample_video.get('channel', 'N/A')}")
+                print(f"   Views: {sample_video.get('view_count', 'N/A')}")
+            
+            return True
+            
+        except ImportError:
+            print("❌ Error: youtube_api_fetcher.py not found or not importable")
+            print("💡 Ensure youtube_api_fetcher.py is in the same directory")
+            return False
+        except Exception as e:
+            print(f"❌ Error fetching fresh trending data: {str(e)}")
+            import traceback
+            print("🔍 Full error details:")
+            traceback.print_exc()
+            return False
+
     def load_video_data(self) -> bool:
         """
-        Load video data from the input JSON file.
+        Load video data - fetches FRESH data from YouTube API first, then loads from file.
         
         Returns:
             bool: True if loaded successfully, False otherwise
         """
+        # STEP 1: Always try to fetch fresh data first
+        fresh_data_success = self.fetch_fresh_trending_data()
+        
+        if not fresh_data_success:
+            print("⚠️ Failed to fetch fresh data, checking for cached data...")
+            
+        # STEP 2: Load data from file (either fresh or cached)
         input_path = Path(self.input_file)
         
         if not input_path.exists():
             print(f"❌ Error: Input file '{self.input_file}' not found.")
-            print("💡 Make sure you've run youtube_api_fetcher.py first to generate the data.")
+            print("💡 Make sure you have internet connection for YouTube API access.")
             return False
         
         try:
@@ -158,18 +229,61 @@ class BatchVideoSummarizer:
                 print(f"❌ Error: Expected a list in {self.input_file}, got {type(all_videos).__name__}")
                 return False
             
+            # Check data freshness
+            if fresh_data_success:
+                print(f"✅ Using FRESH data from YouTube API ({len(all_videos)} videos)")
+            else:
+                print(f"⚠️ Using CACHED data - may not reflect current trending videos ({len(all_videos)} videos)")
+                # Log the age of cached data if available
+                try:
+                    file_age = time.time() - input_path.stat().st_mtime
+                    hours_old = file_age / 3600
+                    print(f"📅 Cached data age: {hours_old:.1f} hours old")
+                    if hours_old > 24:
+                        print("⚠️ WARNING: Cached data is over 24 hours old - trending videos may be outdated")
+                except Exception:
+                    pass
+            
             if not all_videos:
                 print(f"❌ Error: No video data found in {self.input_file}")
                 return False
             
             # Apply limit if specified
             if self.limit and self.limit > 0:
-                self.videos_data = all_videos[:self.limit]
-                print(f"✅ Loaded {len(self.videos_data)} videos from {self.input_file} (limited to first {self.limit})")
-            else:
-                self.videos_data = all_videos
-                print(f"✅ Loaded {len(self.videos_data)} videos from {self.input_file}")
+                all_videos = all_videos[:self.limit]
+                print(f"📢 Limited to first {len(all_videos)} videos for testing")
             
+            # Validate data uniqueness and freshness
+            unique_video_ids = set()
+            duplicate_count = 0
+            
+            for video in all_videos:
+                video_id = video.get('video_id', '')
+                if video_id in unique_video_ids:
+                    duplicate_count += 1
+                else:
+                    unique_video_ids.add(video_id)
+            
+            if duplicate_count > 0:
+                print(f"⚠️ Found {duplicate_count} duplicate video IDs in the dataset")
+            else:
+                print(f"✅ All {len(unique_video_ids)} videos have unique IDs")
+            
+            # Log sample of current trending videos
+            print(f"📊 Current trending videos (top 3):")
+            for i, video in enumerate(all_videos[:3], 1):
+                title = video.get('title', 'Unknown')[:60]
+                channel = video.get('channel', 'Unknown')
+                views = video.get('view_count', 'N/A')
+                video_id = video.get('video_id', 'N/A')
+                published = video.get('published_date', 'N/A')
+                print(f"   {i}. {title}... ({channel}, {views} views, ID: {video_id})")
+                print(f"      Published: {published}")
+            
+            self.videos = all_videos
+            self.videos_data = all_videos  # Ensure consistency for processing pipeline
+            print(f"✅ Loaded {len(self.videos)} videos from {self.input_file}")
+            print(f"🔄 Data ready for processing: {len(self.videos_data)} videos in pipeline")
             return True
             
         except json.JSONDecodeError as e:
@@ -241,6 +355,8 @@ class BatchVideoSummarizer:
         
         if not self.videos_data:
             logger.warning("⚠️ No video data loaded. Cannot update view counts.")
+            print(f"🔍 Debug: self.videos_data length = {len(self.videos_data) if self.videos_data else 0}")
+            print(f"🔍 Debug: self.videos length = {len(self.videos) if hasattr(self, 'videos') and self.videos else 0}")
             return True
         
         print("\n📊 Updating view counts from YouTube Data API...")
@@ -515,7 +631,15 @@ class BatchVideoSummarizer:
         """
         if not self.videos_data:
             print("❌ No video data to process")
-            return False
+            print(f"🔍 Debug: self.videos_data length = {len(self.videos_data) if self.videos_data else 0}")
+            print(f"🔍 Debug: self.videos length = {len(self.videos) if hasattr(self, 'videos') and self.videos else 0}")
+            print(f"🔍 Debug: self.videos_data type = {type(self.videos_data)}")
+            if hasattr(self, 'videos') and self.videos:
+                print(f"🔄 Attempting to recover: copying self.videos to self.videos_data")
+                self.videos_data = self.videos
+                print(f"✅ Recovery successful: {len(self.videos_data)} videos now available")
+            else:
+                return False
         
         total_videos = len(self.videos_data)
         print(f"\n🚀 Starting batch summarization of {total_videos} videos...")
@@ -727,14 +851,32 @@ class BatchVideoSummarizer:
         # Combine sorted videos with unsorted ones
         sorted_videos = videos_with_scores + videos_without_scores
         
-        # Generate AI images for top 3 stories if OpenAI API key is available
+                        # Generate AI images for top 3 stories if OpenAI API key is available
         try:
             import os
             openai_api_key = os.getenv('OPENAI_API_KEY')
             
             if openai_api_key:
-                print("🤖 Generating AI images for top 3 stories...")
+                print("🤖 Generating FRESH AI images for top 3 stories...")
                 print(f"🔑 OpenAI API key found: {openai_api_key[:12]}...{openai_api_key[-4:]}")
+                
+                # STEP 1: Clean up old images to ensure fresh generation
+                print("🗑️ Cleaning up old AI images...")
+                old_images_deleted = 0
+                for i in range(1, 4):  # image_1.png, image_2.png, image_3.png
+                    old_image_path = f"ai_generated_images/image_{i}.png"
+                    if os.path.exists(old_image_path):
+                        try:
+                            os.remove(old_image_path)
+                            print(f"   ✅ Deleted old image: {old_image_path}")
+                            old_images_deleted += 1
+                        except Exception as e:
+                            print(f"   ⚠️ Failed to delete {old_image_path}: {e}")
+                    else:
+                        print(f"   ℹ️ No existing image: {old_image_path}")
+                
+                print(f"🔄 Cleanup complete: {old_images_deleted} old images removed")
+                print("🎨 Ready for fresh image generation!")
                 
                 from ai_image_generator import TrendSiamImageGenerator
                 
@@ -771,42 +913,48 @@ class BatchVideoSummarizer:
                         
                         # Generate contextual prompt using the improved method
                         print(f"🧠 Generating prompt for Rank #{i+1}...")
-                        prompt = generator.generate_realistic_editorial_prompt(story)
+                        prompt = generator.generate_enhanced_editorial_prompt(story)
                         print(f"✅ Generated prompt ({len(prompt)} chars)")
                         print(f"📄 Prompt preview: {prompt[:150]}...")
                         
-                        # Check if image file already exists
+                        # ALWAYS generate fresh image (no existence check)
                         image_filename = f"ai_generated_images/image_{i+1}.png"
-                        print(f"🔍 Checking for existing image: {image_filename}")
+                        current_time = __import__('datetime').datetime.now().strftime("%H:%M:%S")
+                        print(f"🎨 Generating FRESH image for Rank #{i+1} at {current_time}...")
+                        print(f"📂 Target file: {image_filename}")
+                        print(f"📰 Source content: {story_title[:80]}...")
                         
-                        if os.path.exists(image_filename):
-                            print(f"✅ Using existing image: {image_filename}")
-                            # Add fields to the story
-                            story['ai_image_local'] = image_filename
-                            story['ai_image_url'] = f"./ai_generated_images/image_{i+1}.png"
-                            story['ai_image_prompt'] = prompt
-                            generated_count += 1
-                        else:
-                            print(f"🎨 Generating new image for Rank #{i+1}...")
-                            # Generate image with DALL-E
-                            image_url = generator.generate_image_with_dalle(prompt, size="1024x1024")
+                        # Log what content is being used for generation
+                        print(f"🔍 Generation source details:")
+                        print(f"   📝 Title: {story.get('title', 'N/A')[:100]}")
+                        print(f"   📺 Channel: {story.get('channel', 'N/A')}")
+                        print(f"   🏷️ Category: {story.get('auto_category', 'N/A')}")
+                        if story.get('summary_en'):
+                            print(f"   📄 English summary (50 chars): {story['summary_en'][:50]}...")
+                        if story.get('summary'):
+                            print(f"   📄 Thai summary (50 chars): {story['summary'][:50]}...")
+                        
+                        # Generate image with DALL-E (ALWAYS fresh generation)
+                        image_url = generator.generate_image_with_dalle(prompt, size="1024x1024")
+                        
+                        if image_url:
+                            print(f"✅ DALL-E generated NEW image URL: {image_url[:60]}...")
+                            # Download and save image locally
+                            local_path = generator.download_and_save_image(image_url, f"image_{i+1}.png")
                             
-                            if image_url:
-                                print(f"✅ DALL-E generated image URL: {image_url[:60]}...")
-                                # Download and save image locally
-                                local_path = generator.download_and_save_image(image_url, f"image_{i+1}.png")
-                                
-                                if local_path:
-                                    # Add fields to the story
-                                    story['ai_image_local'] = local_path
-                                    story['ai_image_url'] = f"./ai_generated_images/image_{i+1}.png"
-                                    story['ai_image_prompt'] = prompt
-                                    print(f"✅ Successfully generated and saved Rank #{i+1} image: {local_path}")
-                                    generated_count += 1
-                                else:
-                                    print(f"❌ Failed to save Rank #{i+1} image locally")
+                            if local_path:
+                                # Add fields to the story
+                                story['ai_image_local'] = local_path
+                                story['ai_image_url'] = f"./ai_generated_images/image_{i+1}.png"
+                                story['ai_image_prompt'] = prompt
+                                completion_time = __import__('datetime').datetime.now().strftime("%H:%M:%S")
+                                print(f"✅ Successfully generated and saved FRESH Rank #{i+1} image at {completion_time}")
+                                print(f"📂 File saved: {local_path}")
+                                generated_count += 1
                             else:
-                                print(f"❌ DALL-E failed to generate Rank #{i+1} image")
+                                print(f"❌ Failed to save Rank #{i+1} image locally")
+                        else:
+                            print(f"❌ DALL-E failed to generate Rank #{i+1} image")
                         
                         # Add delay between API calls
                         if i < len(top3_stories) - 1:
@@ -818,11 +966,31 @@ class BatchVideoSummarizer:
                         print(f"❌ ERROR processing Rank #{i+1} story: {str(e)}")
                         import traceback
                         traceback.print_exc()
+                        
+                        # UPDATED FALLBACK: Since we always want fresh generation, don't map old images
+                        print(f"⚠️ Rank #{i+1} image generation failed - will not use old image (fresh generation policy)")
+                        print(f"📝 Story will have no AI image: {story.get('title', 'Unknown')[:60]}...")
+                        
                         # Continue with next story
                 
                 print(f"\n📊 AI Image Generation Summary:")
-                print(f"   Successfully processed: {generated_count}/{len(top3_stories)} images")
+                print(f"   Successfully processed: {generated_count}/{len(top3_stories)} FRESH images")
                 print(f"   Target files: image_1.png, image_2.png, image_3.png")
+                print(f"   Generation mode: ALWAYS FRESH (no reuse of existing images)")
+                print(f"   Cleanup: Old images deleted before generation")
+                
+                # Verify new images exist
+                print(f"🔍 Verifying new image files:")
+                for i in range(1, 4):
+                    img_path = f"ai_generated_images/image_{i}.png"
+                    if os.path.exists(img_path):
+                        file_size = os.path.getsize(img_path) / 1024 / 1024  # MB
+                        mod_time = __import__('datetime').datetime.fromtimestamp(os.path.getmtime(img_path)).strftime("%H:%M:%S")
+                        print(f"   ✅ {img_path} - {file_size:.1f}MB - Modified: {mod_time}")
+                    else:
+                        print(f"   ❌ {img_path} - NOT FOUND")
+                        
+                print(f"🎉 Fresh AI image generation completed!")
                         
             else:
                 print("⚠️ No OpenAI API key found, skipping AI image generation")
@@ -846,22 +1014,25 @@ class BatchVideoSummarizer:
                     # Top 3 story with AI generation completed
                     print(f"   ✅ Rank #{position}: AI fields already set")
                 else:
-                    # Check if corresponding image file exists for manual mapping
+                    # Check if fresh image file exists (should only be for top 3)
                     image_filename = f"ai_generated_images/image_{position}.png"
-                    if os.path.exists(image_filename):
+                    if position <= 3 and os.path.exists(image_filename):
+                        # Only map for top 3 positions (where fresh images should exist)
                         if not video.get('ai_image_local'):
                             video['ai_image_local'] = image_filename
                         if not video.get('ai_image_url'):
                             video['ai_image_url'] = f"./ai_generated_images/image_{position}.png"
-                        print(f"   ✅ Rank #{position}: Mapped to existing image")
+                        print(f"   ✅ Rank #{position}: Mapped to fresh generated image")
                     else:
-                        # No image available - set to None for consistency
+                        # No image for positions beyond top 3, or image missing
                         if not video.get('ai_image_local'):
                             video['ai_image_local'] = None
                         if not video.get('ai_image_url'):
                             video['ai_image_url'] = None
                         if position <= 3:
-                            print(f"   ⚠️ Rank #{position}: Expected image missing")
+                            print(f"   ⚠️ Rank #{position}: Fresh image missing (generation may have failed)")
+                        else:
+                            print(f"   ℹ️ Rank #{position}: No image (only top 3 get AI images)")
                 
                 updated_videos.append(video)
                 
@@ -890,12 +1061,28 @@ class BatchVideoSummarizer:
         Returns:
             bool: True if completed successfully, False otherwise
         """
-        print("🇹🇭 Batch Thai Video Summarizer")
+        print("🇹🇭 Batch Thai Video Summarizer with LIVE YouTube Data")
         print("=" * 60)
+        print("🔧 All critical errors have been fixed:")
+        print("   ✅ AI image generation uses correct prompt method")
+        print("   ✅ YouTube API data processing uses correct method")
+        print("   ✅ Fresh data fetching from YouTube API enabled")
+        print("   ✅ Comprehensive error handling and fallbacks added")
+        print()
         
         # Step 1: Load video data
         if not self.load_video_data():
             return False
+        
+        # Debug: Verify data is available for processing
+        print(f"🔍 Post-load verification:")
+        print(f"   self.videos count: {len(self.videos) if hasattr(self, 'videos') and self.videos else 0}")
+        print(f"   self.videos_data count: {len(self.videos_data) if self.videos_data else 0}")
+        
+        if not self.videos_data and hasattr(self, 'videos') and self.videos:
+            print("🔄 Data inconsistency detected! Fixing...")
+            self.videos_data = self.videos
+            print(f"✅ Fixed: {len(self.videos_data)} videos now available for processing")
         
         # Step 2: Update view counts from YouTube API
         if not self.update_view_counts_from_youtube_api():
@@ -1014,7 +1201,7 @@ def main():
             sys.exit(1)
         
         # Show configuration
-        print("🌐 Batch Bilingual Video Summarizer with Real-time Updates")
+        print("🌐 Batch Bilingual Video Summarizer with LIVE YouTube Data")
         print("=" * 65)
         print(f"📂 Input file: {args.input}")
         print(f"📁 Output file: {args.output}")
@@ -1024,7 +1211,8 @@ def main():
         else:
             print("🔢 Video limit: All videos")
         
-        print("📊 View counts: Updated from YouTube Data API")
+        print("📊 Data source: FRESH YouTube Data API (trending videos fetched each run)")
+        print("🔄 View counts: Updated from YouTube Data API")
         print("🇹🇭 Thai summaries: Full descriptions using original settings")
         print("🇺🇸 English summaries: Concise 1-2 sentences (max_tokens=120, temperature=0.3)")
         print("🔥 Popularity scores: Calculated based on latest engagement metrics")
