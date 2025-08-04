@@ -3340,8 +3340,7 @@ def show_main_page():
     
     # Load news data using unified system (same as Weekly Report and PDF)
     with st.spinner(get_text("loading_news")):
-        news_data = load_news_data()  # Fixed: Use load_news_data() for main page instead of load_weekly_data()
-
+        news_data = load_weekly_data()  # Use unified data loading system
         
         # Add category classification and view_details analysis for each news item (if not already present)
         for item in news_data:
@@ -3369,11 +3368,9 @@ def show_main_page():
         
         # Apply filters to data
         filtered_data = filter_news_data(news_data, selected_platform, selected_category, selected_date)
-        print(f"🔍 DEBUG: After filtering - {len(filtered_data)} items from {len(news_data)} total")
         
         # Sort by popularity score (descending), then by view count (descending)
         filtered_data = sort_news_by_popularity(filtered_data)
-        print(f"🔍 DEBUG: After sorting - {len(filtered_data)} items ready for display")
         
         # Show filter results
         if len(filtered_data) != len(news_data):
@@ -3383,7 +3380,6 @@ def show_main_page():
         
         # Display filtered news items as modern cards
         if filtered_data:
-
             for index, news_item in enumerate(filtered_data):
                 create_news_card(news_item, index, show_prompts, category_counts)
             
