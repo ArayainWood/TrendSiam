@@ -1,4 +1,8 @@
-# TrendSiam Project - Git Ignore Rules
+# TrendSiam Project - Comprehensive Git Ignore Rules
+
+# ================================================================
+# CRITICAL: Prevent large files and sensitive data
+# ================================================================
 
 # Environment variables and sensitive configuration
 .env
@@ -7,6 +11,7 @@
 .env.production
 .env.development
 .env.test
+.env.backup
 
 # API Keys and secrets (additional protection)
 *.key
@@ -14,12 +19,71 @@
 secrets.json
 config.json
 credentials.json
+auth.json
+.secrets/
 
-# Python
+# ================================================================
+# NODE.JS / NEXT.JS / TYPESCRIPT
+# ================================================================
+
+# Dependencies - NEVER commit these
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Next.js build outputs
+.next/
+.nuxt/
+dist/
+build/
+out/
+.output/
+
+# Next.js cache and runtime files
+.next/
+.swc/
+.turbo/
+
+# TypeScript cache
+*.tsbuildinfo
+.tsbuildinfo
+
+# Package manager files
+package-lock.json.backup
+yarn.lock.backup
+.pnpm-store/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+.nyc_output
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache
+
+# ================================================================
+# PYTHON
+# ================================================================
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -45,64 +109,46 @@ venv/
 ENV/
 env/
 .virtualenv/
+.conda/
 
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
+# PyInstaller
+*.manifest
+*.spec
 
-# Logs
-*.log
-logs/
-log/
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Temporary files
-*.tmp
-*.temp
-temp/
-tmp/
-
-# Data files (large datasets)
-*.csv
-*.json.bak
-*.json.backup
-sample.json
-
-# AI Generated content that can be regenerated
-# Note: ai_generated_images/ contains app assets, kept in repo
-generated_prompts/
-*.generated
-
-# Test and debug files
-debug_*
-test_*
-*_test.py
-*_debug.py
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Streamlit
-.streamlit/
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
 
 # pyenv
 .python-version
 
 # pipenv
 Pipfile.lock
+
+# poetry
+poetry.lock
 
 # PEP 582
 __pypackages__/
@@ -114,11 +160,199 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/ 
+# ================================================================
+# IDE AND EDITOR FILES
+# ================================================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# ================================================================
+# OPERATING SYSTEM FILES
+# ================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ================================================================
+# LOGS AND TEMPORARY FILES
+# ================================================================
+
+# Log files
+*.log
+logs/
+log/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+.cache/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# ================================================================
+# DATA AND BACKUP FILES
+# ================================================================
+
+# Large data files (prevent accidental commits)
+*.csv
+*.xlsx
+*.xls
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*_backup
+*_backup.*
+*.json.bak
+*.json.backup
+sample.json
+
+# Archive files (usually large)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# ================================================================
+# AI GENERATED CONTENT
+# ================================================================
+
+# AI Generated content that can be regenerated
+# Note: ai_generated_images/ contains app assets, kept in repo
+generated_prompts/
+*.generated
+.ai-cache/
+
+# ================================================================
+# TEST AND DEBUG FILES
+# ================================================================
+
+# Test files (if not needed in repo)
+debug_*
+test_*
+*_test.py
+*_debug.py
+*.test.local
+
+# Mock data
+mock_*
+*_mock.*
+fixtures/
+
+# ================================================================
+# FRAMEWORK SPECIFIC
+# ================================================================
+
+# Streamlit
+.streamlit/
+
+# Vercel
+.vercel
+
+# Netlify
+.netlify/
+
+# ================================================================
+# SECURITY AND COMPLIANCE
+# ================================================================
+
+# Security scan results
+security-audit.json
+vulnerability-report.json
+
+# Local configuration files that might contain secrets
+local.json
+config.local.json
+settings.local.json
+
+# ================================================================
+# PERFORMANCE AND MONITORING
+# ================================================================
+
+# Performance logs
+*.cpuprofile
+*.heapprofile
+*.log
+
+# Monitoring and analytics
+.monitoring/
+analytics/
+
+# ================================================================
+# END OF FILE
+# ================================================================

@@ -1,0 +1,251 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Custom Properties for theming */
+:root {
+  --font-space-grotesk: 'Space Grotesk', system-ui, sans-serif;
+  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-jetbrains: 'JetBrains Mono', monospace;
+  
+  /* BIG.dk inspired spacing ratios */
+  --ratio-golden: 1.618;
+  --ratio-major-third: 1.25;
+  --ratio-perfect-fourth: 1.333;
+  
+  /* Tadao Ando inspired grid system */
+  --grid-unit: 8px;
+  --grid-gutter: calc(var(--grid-unit) * 3);
+  --grid-margin: calc(var(--grid-unit) * 4);
+  
+  /* Dynamic spacing for responsive design */
+  --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+  --space-sm: clamp(0.75rem, 1.5vw, 1rem);
+  --space-md: clamp(1rem, 2vw, 1.5rem);
+  --space-lg: clamp(1.5rem, 3vw, 2.5rem);
+  --space-xl: clamp(2rem, 4vw, 4rem);
+  --space-2xl: clamp(3rem, 6vw, 6rem);
+  --space-3xl: clamp(4rem, 8vw, 10rem);
+  
+  /* Content widths */
+  --content-narrow: 600px;
+  --content-medium: 800px;
+  --content-wide: 1200px;
+  --content-full: 1400px;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-feature-settings: 'cv11', 'ss01';
+  text-rendering: optimizeLegibility;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-concrete-100 dark:bg-void-900;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-concrete-300 dark:bg-void-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-concrete-400 dark:bg-void-600;
+}
+
+/* Selection styles */
+::selection {
+  @apply bg-accent-500/20 text-accent-900;
+}
+
+::-moz-selection {
+  @apply bg-accent-500/20 text-accent-900;
+}
+
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-space-grotesk);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  
+  /* Responsive typography scale inspired by big.dk */
+  .text-hero {
+    font-size: clamp(3.5rem, 8vw, 12rem);
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+  }
+  
+  .text-mega {
+    font-size: clamp(4rem, 12vw, 16rem);
+    line-height: 0.85;
+    letter-spacing: -0.05em;
+  }
+  
+  /* Improved focus styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-accent-500 ring-offset-2 ring-offset-white dark:ring-offset-void-950;
+  }
+}
+
+@layer components {
+  /* BIG.dk inspired button styles */
+  .btn-primary {
+    @apply bg-concrete-900 text-white px-8 py-4 font-heading font-medium tracking-wide uppercase text-sm hover:bg-accent-500 transition-all duration-300 ease-out;
+    @apply border border-concrete-900 hover:border-accent-500;
+    @apply transform hover:scale-[1.02] active:scale-[0.98];
+  }
+  
+  .btn-secondary {
+    @apply bg-transparent text-concrete-900 dark:text-white px-8 py-4 font-heading font-medium tracking-wide uppercase text-sm;
+    @apply border border-concrete-900 dark:border-white hover:bg-concrete-900 hover:text-white dark:hover:bg-white dark:hover:text-concrete-900;
+    @apply transition-all duration-300 ease-out transform hover:scale-[1.02] active:scale-[0.98];
+  }
+  
+  .btn-minimal {
+    @apply text-concrete-900 dark:text-white font-heading font-medium tracking-wide uppercase text-sm;
+    @apply border-b border-concrete-900 dark:border-white hover:border-accent-500 hover:text-accent-500;
+    @apply transition-all duration-300 ease-out pb-1;
+  }
+  
+  /* Gradient text utility with proper dark mode support */
+  .gradient-text {
+    @apply bg-gradient-to-r from-accent-500 to-thai-500 bg-clip-text text-transparent;
+  }
+  
+  .dark .gradient-text {
+    @apply from-accent-400 to-thai-400;
+  }
+  
+  /* News card component with Tadao Ando inspired minimalism */
+  .news-card {
+    @apply bg-white dark:bg-void-900 border border-concrete-200 dark:border-void-800;
+    @apply transition-all duration-500 ease-out;
+    @apply hover:shadow-xl hover:border-accent-500/30;
+    @apply cursor-pointer;
+  }
+  
+  .news-card:hover {
+    transform: translateY(-2px);
+  }
+  
+  /* Grid system inspired by Tadao Ando's architectural precision */
+  .grid-concrete {
+    display: grid;
+    gap: var(--grid-gutter);
+    padding: var(--grid-margin);
+  }
+  
+  .grid-cols-concrete {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  
+  /* Typography scale system */
+  .type-display {
+    @apply font-heading font-bold tracking-tight text-concrete-900 dark:text-white;
+  }
+  
+  .type-heading {
+    @apply font-heading font-semibold tracking-tight text-concrete-900 dark:text-white;
+  }
+  
+  .type-body {
+    @apply font-sans text-concrete-700 dark:text-concrete-300 leading-relaxed;
+  }
+  
+  .type-caption {
+    @apply font-sans text-sm text-concrete-500 dark:text-concrete-500 tracking-wide;
+  }
+  
+  /* Container system */
+  .container-narrow {
+    @apply max-w-2xl mx-auto px-4;
+  }
+  
+  .container-medium {
+    @apply max-w-4xl mx-auto px-4;
+  }
+  
+  .container-wide {
+    @apply max-w-6xl mx-auto px-4;
+  }
+  
+  .container-full {
+    @apply max-w-7xl mx-auto px-4;
+  }
+  
+  /* Big.dk inspired section spacing */
+  .section-spacing {
+    @apply py-16 md:py-24 lg:py-32;
+  }
+  
+  .section-spacing-sm {
+    @apply py-8 md:py-12 lg:py-16;
+  }
+  
+  /* Image effects */
+  .image-reveal {
+    @apply overflow-hidden;
+  }
+  
+  .image-reveal img {
+    @apply transition-transform duration-700 ease-out;
+  }
+  
+  .image-reveal:hover img {
+    @apply scale-105;
+  }
+  
+  /* Loading states */
+  .skeleton {
+    @apply bg-concrete-200 dark:bg-void-800 animate-pulse rounded;
+  }
+  
+  /* Custom borders inspired by architectural drawings */
+  .border-architect {
+    @apply border border-concrete-200 dark:border-void-800;
+  }
+  
+  .border-architect-thick {
+    @apply border-2 border-concrete-900 dark:border-white;
+  }
+  
+  /* Accessibility improvements */
+  .sr-only {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+    clip: rect(0, 0, 0, 0);
+  }
+  
+  /* Motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Hide zoom overlay icons as requested */
+.zoom-overlay-icon {
+  display: none !important;
+}
+
+.zoom-icon-overlay {
+  display: none !important;
+}
+
+.image-zoom-overlay {
+  display: none !important;
+}
