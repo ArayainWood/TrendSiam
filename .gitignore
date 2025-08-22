@@ -244,6 +244,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# Import error logs (transient build artifacts)
+importErrors_*.json
+
 # Temporary files
 *.tmp
 *.temp

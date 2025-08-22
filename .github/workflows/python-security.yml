@@ -1,0 +1,149 @@
+name: Python Security Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**.py'
+      - 'requirements*.txt'
+      - 'requirements*.in'
+      - '.github/workflows/python-security.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.py'
+      - 'requirements*.txt'
+      - 'requirements*.in'
+  schedule:
+    # Run weekly on Monday at 9am UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install pip-tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-tools
+    
+    - name: Verify requirements.txt is up to date
+      run: |
+        pip-compile --generate-hashes --resolver=backtracking requirements.in -o requirements.tmp
+        if ! diff -q requirements.txt requirements.tmp > /dev/null 2>&1; then
+          echo "❌ requirements.txt is out of date. Please run:"
+          echo "pip-compile --generate-hashes --resolver=backtracking requirements.in"
+          exit 1
+        fi
+        rm requirements.tmp
+    
+    - name: Install dependencies with hash verification
+      run: |
+        pip install --require-hashes -r requirements.txt
+    
+    - name: Run pip-audit
+      run: |
+        pip-audit -r requirements.txt --strict --desc
+    
+    - name: Run safety check
+      run: |
+        safety check -r requirements.txt --full-report
+      continue-on-error: true  # Safety sometimes has false positives
+    
+    - name: Run bandit security scan
+      run: |
+        bandit -r . -f json -o bandit-report.json || true
+        if [ -f bandit-report.json ]; then
+          python -m json.tool bandit-report.json
+          # Check for high severity issues
+          high_issues=$(python -c "import json; data=json.load(open('bandit-report.json')); print(len([r for r in data.get('results', []) if r.get('issue_severity') == 'HIGH']))")
+          if [ "$high_issues" -gt 0 ]; then
+            echo "❌ Found $high_issues high severity security issues"
+            exit 1
+          fi
+        fi
+    
+    - name: Check for banned crypto APIs
+      run: |
+        # Check for PKCS1v15 decryption
+        if grep -r "padding\.PKCS1v15()" --include="*.py" . | grep -v "crypto_security.py" | grep "decrypt"; then
+          echo "❌ Found RSA decryption with PKCS1v15 padding (vulnerable to Bleichenbacher attack)"
+          exit 1
+        fi
+        
+        # Check for weak RSA key sizes
+        if grep -r "key_size\s*=\s*1024\|key_size\s*=\s*512" --include="*.py" .; then
+          echo "❌ Found weak RSA key size (must be >= 2048 bits)"
+          exit 1
+        fi
+        
+        # Check for hardcoded keys
+        if grep -r "private_key\s*=\s*['\"]" --include="*.py" . | grep -v "test_\|example\|crypto_security.py"; then
+          echo "❌ Found potential hardcoded private key"
+          exit 1
+        fi
+        
+        echo "✅ No banned crypto APIs found"
+    
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports-${{ matrix.python-version }}
+        path: |
+          bandit-report.json
+          pip-audit-report.txt
+        retention-days: 30
+
+  dependabot-alert-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check Dependabot alerts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const alerts = await github.rest.dependabot.listAlertsForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            ecosystem: 'pip'
+          });
+          
+          const criticalAlerts = alerts.data.filter(alert => 
+            alert.security_vulnerability.severity === 'critical' ||
+            alert.security_vulnerability.severity === 'high'
+          );
+          
+          if (criticalAlerts.length > 0) {
+            console.log(`❌ Found ${criticalAlerts.length} critical/high severity Dependabot alerts:`);
+            criticalAlerts.forEach(alert => {
+              console.log(`- ${alert.security_vulnerability.package.name}: ${alert.security_vulnerability.summary}`);
+            });
+            core.setFailed('Critical security vulnerabilities found');
+          } else {
+            console.log('✅ No critical/high severity Dependabot alerts');
+          }

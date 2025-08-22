@@ -1,10 +1,12 @@
 export interface NewsItem {
+  id?: string // Database ID
   rank: string | number
   title: string
   channel: string
   view_count: string // YouTube views (external)
   views?: number // Internal TrendSiam site views
   published_date: string
+  date?: string // Date in YYYY-MM-DD format
   video_id: string
   description: string
   duration: string
@@ -24,9 +26,18 @@ export interface NewsItem {
     score: string
   }
   auto_category: string
+  platform: string
   ai_image_local?: string
-  ai_image_url?: string
-  ai_image_prompt?: string
+  ai_image_url?: string | null
+  ai_image_prompt?: string | null
+  display_image_url?: string // [rank-sync-fix] Pre-resolved display image URL from server
+  
+  // NEW: Additional Analysis field
+  analysis?: {
+    text?: string;          // plain text or markdown
+    html?: string;          // optional pre-rendered safe HTML
+    bullets?: string[];     // optional bullet points
+  } | string | null;
 }
 
 export interface FilterState {
@@ -88,3 +99,51 @@ export interface StatsData {
     avg: number
   }
 }
+
+// Supabase database interfaces with full metadata
+export interface NewsTrend {
+  id: string
+  title: string
+  summary: string | null
+  summary_en: string | null
+  platform: string | null
+  popularity_score: number | null
+  popularity_score_precise: number | null
+  date: string | null
+  category: string | null
+  ai_image_url: string | null
+  ai_image_prompt: string | null
+  
+  // Original metadata fields
+  video_id: string | null
+  channel: string | null
+  view_count: string | null
+  published_date: string | null
+  description: string | null
+  duration: string | null
+  like_count: string | null
+  comment_count: string | null
+  reason: string | null
+  
+  // View details metadata
+  raw_view: string | null
+  growth_rate: string | null
+  platform_mentions: string | null
+  keywords: string | null
+  ai_opinion: string | null
+  score_details: string | null
+  
+  // System fields
+  created_at?: string
+  updated_at?: string
+}
+
+// Extended news trend interface for API responses
+export interface NewsTrendWithMeta extends NewsTrend {
+  rank?: number
+  views?: number
+}
+
+// Re-export snapshot types for convenience
+export type { SnapshotItem } from './snapshots';
+export { toScoreString, toCountNumber, isSnapshotItem } from './snapshots';

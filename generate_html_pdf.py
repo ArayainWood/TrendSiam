@@ -167,11 +167,15 @@ def calculate_category_breakdown(stories):
 def generate_html_report(stories_data, start_date, end_date, output_path='report.html'):
     """Generate HTML report from stories data"""
     
-    # Read the HTML template
-    template_path = 'report_template.html'
+    # Read the modern HTML template
+    template_path = 'report_template_modern.html'
     if not os.path.exists(template_path):
-        print(f"Error: Template file {template_path} not found!")
-        return None
+        print(f"Error: Modern template file {template_path} not found!")
+        print("Falling back to old template...")
+        template_path = 'report_template.html'
+        if not os.path.exists(template_path):
+            print(f"Error: Template file {template_path} not found!")
+            return None
     
     with open(template_path, 'r', encoding='utf-8') as f:
         template_content = f.read()
@@ -388,38 +392,58 @@ def convert_html_to_pdf(html_path, pdf_path='report.pdf'):
         return None
 
 def load_real_data():
-    """Load real data using the same logic as the web interface"""
+    """Load fresh data from the latest JSON file - always up-to-date"""
+    
+    # 🔧 PART 1: Always use the latest trending data from frontend
+    json_path = "frontend/public/data/thailand_trending_summary.json"
+    
     try:
-        # Import the load_weekly_data function from app.py
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+        # ✅ Read fresh from disk - no caching
+        print(f"🔍 Loading fresh data from: {json_path}")
+        with open(json_path, "r", encoding="utf-8") as f:
+            trending_data = json.load(f)
         
-        from app import load_weekly_data
-        
-        data = load_weekly_data()
-        if data and len(data) > 0:
-            print(f"📊 Loaded {len(data)} stories from real data")
-            return data
+        if isinstance(trending_data, list) and len(trending_data) > 0:
+            # 🧪 Debug print to confirm data freshness
+            print("🧪 Loaded trending data for PDF generation:")
+            print([story["title"] for story in trending_data[:3]])
+            print(f"📊 Total stories loaded: {len(trending_data)}")
+            print(f"📅 Data timestamp check: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            return trending_data
         else:
-            print("⚠️ No data found from load_weekly_data, falling back to JSON file")
+            print(f"⚠️ Empty data from {json_path}")
             return load_json_fallback()
+            
+    except FileNotFoundError:
+        print(f"⚠️ File not found: {json_path}, trying fallback...")
+        return load_json_fallback()
     except Exception as e:
-        print(f"⚠️ Error loading data from app.py: {e}")
+        print(f"⚠️ Error reading {json_path}: {e}")
         return load_json_fallback()
 
 def load_json_fallback():
-    """Fallback to load from JSON file directly"""
-    try:
-        with open('thailand_trending_summary.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, list) and len(data) > 0:
-                print(f"📊 Loaded {len(data)} stories from JSON fallback")
-                return data[:10]  # Take top 10
-    except FileNotFoundError:
-        pass
+    """Fallback to load from backup JSON file directly"""
+    fallback_paths = [
+        'thailand_trending_summary.json',  # Root directory backup
+        'frontend/public/thailand_trending_summary.json'  # Alternative path
+    ]
     
-    print("❌ No real data found, using sample data")
+    for path in fallback_paths:
+        try:
+            print(f"🔄 Trying fallback path: {path}")
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    print(f"📊 Loaded {len(data)} stories from fallback: {path}")
+                    return data
+        except FileNotFoundError:
+            continue
+        except Exception as e:
+            print(f"⚠️ Error reading {path}: {e}")
+            continue
+    
+    print("❌ No real data found in any location, using sample data")
     return get_sample_data()
 
 def get_sample_data():
@@ -474,8 +498,9 @@ def get_sample_data():
     ]
 
 def main():
-    """Main function to generate HTML and PDF reports"""
-    print("🔍 TrendSiam HTML Report Generator")
+    """Main function to generate modern dark-themed HTML and PDF reports"""
+    print("🔍 TrendSiam Modern Report Generator")
+    print("🎨 Dark Theme • Modern Layout • Fresh Data")
     print("=" * 50)
     
     # Load data
@@ -490,7 +515,7 @@ def main():
         stories_data=stories_data,
         start_date=start_date,
         end_date=end_date,
-        output_path='trendsiam_report.html'
+        output_path='trendsiam_modern_report.html'
     )
     
     if html_path:
@@ -499,22 +524,34 @@ def main():
         # Generate PDF if WeasyPrint is available
         pdf_path = convert_html_to_pdf(
             html_path=html_path,
-            pdf_path='trendsiam_report.pdf'
+            pdf_path='trendsiam_modern_report.pdf'
         )
         
         if pdf_path:
             print(f"📄 PDF Report: {pdf_path}")
+            
+            # Copy to frontend public directory for website serving
+            frontend_pdf_path = "frontend/public/trendsiam_report.pdf"
+            try:
+                import shutil
+                shutil.copy2(pdf_path, frontend_pdf_path)
+                print(f"📋 Copied to frontend: {frontend_pdf_path}")
+                print(f"🌐 Available at: /trendsiam_report.pdf")
+            except Exception as e:
+                print(f"⚠️ Failed to copy to frontend: {e}")
         
-        print("\n✅ Report generation complete!")
+        print("\n✅ Modern report generation complete!")
         print("\n📋 Features included:")
-        print("✅ Professional HTML layout with Inter/Roboto fonts")
-        print("✅ Executive summary with key metrics")
-        print("✅ Top 10 trending stories with rankings")
-        print("✅ Category breakdown table with performance data")
-        print("✅ Clean sections without overlapping")
-        print("✅ English-only professional format")
-        print("✅ Footer with timestamp and branding")
-        print("✅ WeasyPrint-optimized for perfect PDF conversion")
+        print("✅ 🎨 Dark modern theme matching website design")
+        print("✅ 🔤 Inter/Roboto fonts for professional typography")
+        print("✅ 🏆 Special rank badges (gold/silver/bronze for top 3)")
+        print("✅ 📊 Executive summary with key metrics grid")
+        print("✅ 🔥 Top stories with popularity scores and views")
+        print("✅ 📈 Category breakdown with performance data")
+        print("✅ 🎯 Orange/yellow accent colors matching site")
+        print("✅ 📱 Clean responsive layout optimized for PDF")
+        print("✅ 🕒 Fresh data from latest JSON with debug confirmation")
+        print("✅ 🌐 Tadao Ando inspired minimalist grid aesthetics")
         
     else:
         print("❌ Failed to generate HTML report")

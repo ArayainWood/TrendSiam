@@ -233,14 +233,15 @@ class TrendSiamImageGenerator:
 
     def generate_enhanced_editorial_prompt(self, news_item: Dict[str, Any]) -> str:
         """
-        Generate enhanced editorial illustration prompts with improved sanitization and fallbacks.
-        Creates photojournalistic-style scenes depicting real people, events, and locations.
+        Generate intelligent, context-aware editorial illustration prompts.
+        Uses auto_category and content analysis to create category-specific prompts
+        that accurately reflect the type of content (games, sports, music, etc.).
         
         Args:
-            news_item: Dictionary containing news data
+            news_item: Dictionary containing news data with title, summary, auto_category, etc.
             
         Returns:
-            Detailed sanitized prompt for creating realistic editorial-style illustration
+            Context-specific sanitized prompt for creating realistic editorial-style illustration
         """
         try:
             # Get the most relevant content using safe helper
@@ -261,78 +262,41 @@ class TrendSiamImageGenerator:
                 "An artistic illustration of the trending news: "
             )
             
-            # Generate content-specific realistic scenes based on actual news content
-            content_lower = content.lower()
+            # Get additional metadata for intelligent context detection
+            summary = sanitize_prompt_text(news_item.get('summary', ''))
+            summary_en = sanitize_prompt_text(news_item.get('summary_en', ''))
             
-            # SPORTS (volleyball, football, etc.)
-            if any(keyword in content_lower for keyword in ['volleyball', 'วอลเลย์บอล', 'vnl', 'football', 'ฟุตบอล', 'soccer', 'match', 'team', 'players', 'sport', 'กีฬา', 'แข่งขัน']):
-                prompt = (f"{base_style}{content}. "
-                         f"Sports illustration showing athletes in action during a competitive match. "
-                         f"Professional sports venue with players demonstrating skill and teamwork. "
-                         f"Modern editorial style, realistic composition.")
+            # Analyze combined content for specific context within categories
+            combined_content = f"{title} {summary} {summary_en} {channel}".lower()
             
-            # MUSIC/ENTERTAINMENT
-            elif any(keyword in content_lower for keyword in ['music', 'เพลง', 'concert', 'performance', 'blackpink', 'mv', 'song', 'artist', 'live', 'entertainment', 'บันเทิง']):
-                prompt = (f"{base_style}{content}. "
-                         f"Music entertainment illustration with artists performing. "
-                         f"Professional concert lighting, modern entertainment venue. "
-                         f"Musicians with instruments, capturing live music energy. "
-                         f"Editorial newspaper style, realistic composition.")
+            # PRIMARY: Use auto_category as main context indicator
+            if "เกม/อนิเมะ (Games/Anime)" in category:
+                prompt = self._generate_gaming_prompt(base_style, content, combined_content, title)
             
-            # GAMING/TECHNOLOGY
-            elif any(keyword in content_lower for keyword in ['gaming', 'เกม', 'game', 'minecraft', 'roblox', 'streamer', 'computer', 'technology', 'digital', 'pubg', 'พับจี']):
-                prompt = (f"{base_style}{content}. "
-                         f"Gaming technology illustration with people using modern digital devices. "
-                         f"Gaming setup with monitors, modern gaming equipment. "
-                         f"Content creators engaged with technology. "
-                         f"Editorial illustration style, realistic composition.")
+            elif "กีฬา (Sports)" in category:
+                prompt = self._generate_sports_prompt(base_style, content, combined_content, title)
             
-            # TV/SERIES/DRAMA
-            elif any(keyword in content_lower for keyword in ['series', 'ซีรีส์', 'drama', 'ละคร', 'tv', 'trailer', 'episode', 'show', 'netflix']):
-                prompt = (f"{base_style}{content}. "
-                         f"Television entertainment illustration with professional production. "
-                         f"Actors in dramatic scene with modern filming equipment. "
-                         f"High-quality entertainment production environment. "
-                         f"Editorial newspaper style, realistic composition.")
+            elif "บันเทิง (Entertainment)" in category:
+                prompt = self._generate_entertainment_prompt(base_style, content, combined_content, title)
             
-            # NEWS/POLITICS
-            elif any(keyword in content_lower for keyword in ['news', 'ข่าว', 'politics', 'government', 'political', 'minister', 'official', 'การเมือง']):
-                prompt = (f"{base_style}{content}. "
-                         f"News conference illustration with officials and journalists. "
-                         f"Professional setting with media equipment and microphones. "
-                         f"Formal government environment. "
-                         f"Editorial newspaper illustration, realistic composition.")
+            elif "การเมือง/ข่าวทั่วไป (Politics/General News)" in category:
+                prompt = self._generate_news_politics_prompt(base_style, content, combined_content)
             
-            # BUSINESS/FINANCE
-            elif any(keyword in content_lower for keyword in ['business', 'ธุรกิจ', 'economic', 'financial', 'market', 'company']):
-                prompt = (f"{base_style}{content}. "
-                         f"Business illustration with professionals in modern office setting. "
-                         f"People in business attire discussing charts and financial data. "
-                         f"Corporate meeting environment. "
-                         f"Editorial newspaper style, realistic composition.")
+            elif "การศึกษา (Education)" in category:
+                prompt = self._generate_education_prompt(base_style, content, combined_content)
             
-            # HEALTH/MEDICAL
-            elif any(keyword in content_lower for keyword in ['health', 'สุขภาพ', 'medical', 'hospital', 'doctor', 'treatment']):
-                prompt = (f"{base_style}{content}. "
-                         f"Healthcare illustration in modern medical facility. "
-                         f"Medical professionals in clean hospital environment. "
-                         f"Healthcare workers with modern medical equipment. "
-                         f"Editorial newspaper style, realistic composition.")
+            elif "ไลฟ์สไตล์ (Lifestyle)" in category:
+                prompt = self._generate_lifestyle_prompt(base_style, content, combined_content)
             
-            # EDUCATION
-            elif any(keyword in content_lower for keyword in ['education', 'การศึกษา', 'school', 'university', 'student', 'learning']):
-                prompt = (f"{base_style}{content}. "
-                         f"Educational illustration with students and teachers. "
-                         f"Modern classroom or academic setting with learning activities. "
-                         f"Educational facility with teaching materials. "
-                         f"Editorial newspaper style, realistic composition.")
+            elif "ธุรกิจ/การเงิน (Business/Finance)" in category:
+                prompt = self._generate_business_prompt(base_style, content, combined_content)
             
-            # GENERAL NEWS (fallback)
+            elif "สุขภาพ (Health)" in category:
+                prompt = self._generate_health_prompt(base_style, content, combined_content)
+            
+            # FALLBACK: If no category match, use content-based detection
             else:
-                prompt = (f"{base_style}{content}. "
-                         f"Editorial news illustration depicting people engaged in the described activity. "
-                         f"Realistic portrayal of current events with actual people and locations. "
-                         f"Professional newspaper illustration style.")
+                prompt = self._generate_fallback_prompt(base_style, content, combined_content)
             
             # Final sanitization and validation
             final_prompt = sanitize_prompt_text(prompt)
@@ -350,6 +314,181 @@ class TrendSiamImageGenerator:
         except Exception as e:
             logger.error(f"Error generating prompt: {e}")
             return generate_safe_fallback_prompt()
+
+    def _generate_gaming_prompt(self, base_style: str, content: str, combined_content: str, title: str) -> str:
+        """Generate gaming-specific prompts based on game type and content"""
+        
+        # Specific game detection
+        if any(game in combined_content for game in ['honkai star rail', 'honkai: star rail', 'hsr']):
+            return (f"{base_style}{content}. "
+                   f"Futuristic space fantasy illustration featuring characters in cosmic adventure setting. "
+                   f"Sci-fi train traveling through starry galaxies, futuristic space stations and planets. "
+                   f"Anime-style character designs with space exploration theme. "
+                   f"Editorial illustration style, realistic game art composition.")
+        
+        elif any(game in combined_content for game in ['genshin impact', 'genshin', 'teyvat']):
+            return (f"{base_style}{content}. "
+                   f"Fantasy adventure illustration with magical elemental themes. "
+                   f"Enchanted landscapes with floating islands, magical crystals, and ancient ruins. "
+                   f"Anime-style characters wielding elemental powers in mystical environments. "
+                   f"Editorial illustration style, fantasy game world composition.")
+        
+        elif any(game in combined_content for game in ['rov', 'realm of valor', 'mobile legends']):
+            return (f"{base_style}{content}. "
+                   f"MOBA battle arena illustration with strategic team combat scene. "
+                   f"Fantasy heroes with unique abilities in competitive multiplayer environment. "
+                   f"Game interface elements, skill effects, and tactical gameplay visualization. "
+                   f"Editorial esports illustration style, dynamic action composition.")
+        
+        elif any(game in combined_content for game in ['minecraft', 'roblox']):
+            return (f"{base_style}{content}. "
+                   f"Block-building creative world illustration with pixelated landscapes. "
+                   f"Creative construction elements, geometric structures and colorful environments. "
+                   f"Family-friendly gaming atmosphere with building and exploration themes. "
+                   f"Editorial gaming illustration style, creative sandbox composition.")
+        
+        elif any(game in combined_content for game in ['pubg', 'battle royale', 'fortnite']):
+            return (f"{base_style}{content}. "
+                   f"Battle royale competitive gaming illustration with strategic survival elements. "
+                   f"Large-scale multiplayer battlefield with tactical equipment and vehicles. "
+                   f"Competitive esports environment with high-stakes gaming action. "
+                   f"Editorial esports illustration style, intense competition composition.")
+        
+        # Gaming content types
+        elif any(term in combined_content for term in ['trailer', 'character trailer', 'gameplay trailer']):
+            return (f"{base_style}{content}. "
+                   f"Game promotional illustration showcasing character abilities and game world. "
+                   f"Cinematic gaming scenes with dynamic character action and special effects. "
+                   f"Professional game marketing aesthetic with polished visual presentation. "
+                   f"Editorial gaming media style, promotional composition.")
+        
+        elif any(term in combined_content for term in ['stream', 'streamer', 'gaming stream', 'live']):
+            return (f"{base_style}{content}. "
+                   f"Gaming content creation illustration with streaming setup and audience interaction. "
+                   f"Modern gaming equipment, multiple monitors, and live streaming environment. "
+                   f"Content creator engaging with gaming community and viewers. "
+                   f"Editorial media illustration style, modern streaming composition.")
+        
+        # General gaming fallback
+        else:
+            return (f"{base_style}{content}. "
+                   f"Gaming culture illustration with modern digital entertainment elements. "
+                   f"Gaming controllers, monitors, and interactive digital experiences. "
+                   f"Contemporary gaming lifestyle and digital entertainment scene. "
+                   f"Editorial gaming illustration style, modern tech composition.")
+
+    def _generate_sports_prompt(self, base_style: str, content: str, combined_content: str, title: str) -> str:
+        """Generate sports-specific prompts based on sport type"""
+        
+        if any(sport in combined_content for sport in ['volleyball', 'วอลเลย์บอล', 'vnl']):
+            return (f"{base_style}{content}. "
+                   f"Volleyball competition illustration with players in dynamic action poses. "
+                   f"Professional indoor volleyball court with net, team coordination and athletic movement. "
+                   f"International tournament atmosphere with competitive sporting spirit. "
+                   f"Editorial sports illustration style, action-focused composition.")
+        
+        elif any(sport in combined_content for sport in ['football', 'ฟุตบอล', 'soccer']):
+            return (f"{base_style}{content}. "
+                   f"Football/soccer match illustration with players in competitive action. "
+                   f"Stadium environment with goal posts, ball movement and team strategy. "
+                   f"Athletic performance and sportsmanship in professional football setting. "
+                   f"Editorial sports illustration style, dynamic match composition.")
+        
+        elif any(sport in combined_content for sport in ['basketball', 'บาสเกตบอล']):
+            return (f"{base_style}{content}. "
+                   f"Basketball game illustration with players shooting and defending. "
+                   f"Indoor court with hoops, fast-paced action and athletic skill display. "
+                   f"Team basketball strategy and individual player excellence. "
+                   f"Editorial sports illustration style, energetic game composition.")
+        
+        else:
+            return (f"{base_style}{content}. "
+                   f"Athletic competition illustration with sporting excellence and teamwork. "
+                   f"Professional sports venue with athletes demonstrating skill and dedication. "
+                   f"Competitive sporting spirit with fair play and achievement focus. "
+                   f"Editorial sports illustration style, inspirational composition.")
+
+    def _generate_entertainment_prompt(self, base_style: str, content: str, combined_content: str, title: str) -> str:
+        """Generate entertainment-specific prompts based on content type"""
+        
+        # Music content
+        if any(term in combined_content for term in ['official mv', 'music video', 'mv', 'เพลง', 'song', 'artist', 'singer']):
+            return (f"{base_style}{content}. "
+                   f"Music performance illustration with artists on stage under professional lighting. "
+                   f"Concert venue atmosphere with musical instruments and sound equipment. "
+                   f"Live music energy with performers engaging audience through musical expression. "
+                   f"Editorial entertainment illustration style, musical performance composition.")
+        
+        # Movie/Film content
+        elif any(term in combined_content for term in ['movie', 'film', 'cinema', 'trailer', 'premiere']):
+            return (f"{base_style}{content}. "
+                   f"Film industry illustration with movie production and cinematic elements. "
+                   f"Professional film set with cameras, lighting, and production crew. "
+                   f"Hollywood-style movie making atmosphere with artistic direction. "
+                   f"Editorial entertainment illustration style, cinematic composition.")
+        
+        # TV/Series content
+        elif any(term in combined_content for term in ['series', 'ซีรีส์', 'drama', 'ละคร', 'episode', 'netflix']):
+            return (f"{base_style}{content}. "
+                   f"Television production illustration with dramatic storytelling elements. "
+                   f"Professional TV studio with filming equipment and dramatic lighting. "
+                   f"Actors in character delivering compelling dramatic performances. "
+                   f"Editorial entertainment illustration style, dramatic composition.")
+        
+        # General entertainment fallback
+        else:
+            return (f"{base_style}{content}. "
+                   f"Entertainment industry illustration with creative performance and artistic expression. "
+                   f"Professional entertainment venue with stage lighting and performance elements. "
+                   f"Artists and performers engaging audiences through creative storytelling. "
+                   f"Editorial entertainment illustration style, artistic composition.")
+
+    def _generate_news_politics_prompt(self, base_style: str, content: str, combined_content: str) -> str:
+        """Generate news/politics-specific prompts"""
+        return (f"{base_style}{content}. "
+               f"News reporting illustration with journalists and press conference setting. "
+               f"Professional media environment with microphones, cameras and news gathering. "
+               f"Democratic discourse and information sharing in civic engagement context. "
+               f"Editorial news illustration style, informative composition.")
+
+    def _generate_education_prompt(self, base_style: str, content: str, combined_content: str) -> str:
+        """Generate education-specific prompts"""
+        return (f"{base_style}{content}. "
+               f"Educational environment illustration with learning and knowledge sharing. "
+               f"Modern classroom or academic setting with students and teaching materials. "
+               f"Educational excellence and academic achievement in learning environment. "
+               f"Editorial education illustration style, inspiring composition.")
+
+    def _generate_lifestyle_prompt(self, base_style: str, content: str, combined_content: str) -> str:
+        """Generate lifestyle-specific prompts"""
+        return (f"{base_style}{content}. "
+               f"Lifestyle and daily living illustration with modern life activities. "
+               f"Contemporary lifestyle choices and personal wellness themes. "
+               f"Quality of life improvements and lifestyle trends. "
+               f"Editorial lifestyle illustration style, aspirational composition.")
+
+    def _generate_business_prompt(self, base_style: str, content: str, combined_content: str) -> str:
+        """Generate business/finance-specific prompts"""
+        return (f"{base_style}{content}. "
+               f"Business and finance illustration with professional corporate environment. "
+               f"Modern office setting with business meetings and financial planning. "
+               f"Economic growth and business success in contemporary workplace. "
+               f"Editorial business illustration style, professional composition.")
+
+    def _generate_health_prompt(self, base_style: str, content: str, combined_content: str) -> str:
+        """Generate health-specific prompts"""
+        return (f"{base_style}{content}. "
+               f"Healthcare illustration with medical professionals and modern healthcare. "
+               f"Clean medical facility with healthcare workers and medical equipment. "
+               f"Health and wellness focus with professional medical care. "
+               f"Editorial healthcare illustration style, caring composition.")
+
+    def _generate_fallback_prompt(self, base_style: str, content: str, combined_content: str) -> str:
+        """Generate fallback prompt when category is unknown"""
+        return (f"{base_style}{content}. "
+               f"Editorial news illustration depicting the described activity or event. "
+               f"Realistic portrayal of current events with relevant people and locations. "
+               f"Professional newspaper illustration style with informative composition.")
 
     # Keep old function name for compatibility
     def generate_editorial_illustration_prompt(self, news_item: Dict[str, Any]) -> str:

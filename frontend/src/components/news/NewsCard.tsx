@@ -4,12 +4,15 @@ import { useState, useEffect } from 'react'
 import { ExternalLink, Eye, ThumbsUp, MessageCircle, Calendar, Star, Code, Copy, ChevronDown, ChevronUp } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import { getText } from '../../lib/i18n'
-import { NewsItem } from '../../types'
+import type { UINewsItem } from '../../lib/normalizeNewsItem'
 import toast from 'react-hot-toast'
 import { newsApi } from '../../lib/api'
+import { getFreshAIImageUrl } from '../../lib/imageUtils'
+import { isTop3, selectCardImage, debugImageSelection } from '../../lib/imagePolicy'
+import { getPopularitySubtext, formatPopularityScore, getPopularityColor, getPopularityBg } from '../../lib/helpers/popularityHelpers'
 
 interface NewsCardProps {
-  news: NewsItem
+  news: UINewsItem
   index: number
 }
 
@@ -31,8 +34,10 @@ export function NewsCard({ news, index }: NewsCardProps) {
     }
   }, [news?.video_id])
 
-  const formatNumber = (num: string | number) => {
+  const formatNumber = (num: string | number | null | undefined) => {
+    if (!num || num === '0') return '0'
     const numValue = typeof num === 'string' ? parseInt(num.replace(/,/g, '')) : num
+    if (isNaN(numValue) || numValue == null) return '0'
     if (numValue >= 1000000) {
       return `${(numValue / 1000000).toFixed(1)}M`
     } else if (numValue >= 1000) {
@@ -44,21 +49,22 @@ export function NewsCard({ news, index }: NewsCardProps) {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString)
+      
+      // Use Asia/Bangkok timezone
+      const options: Intl.DateTimeFormatOptions = {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }
+      
       if (language.code === 'th') {
-        return date.toLocaleDateString('th-TH', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })
+        return date.toLocaleDateString('th-TH', options)
       } else {
-        return date.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })
+        return date.toLocaleDateString('en-US', options)
       }
     } catch {
-      return dateString
+      return dateString || 'N/A'
     }
   }
 
@@ -89,13 +95,35 @@ export function NewsCard({ news, index }: NewsCardProps) {
     }
   }
 
-  const summary = language.code === 'th' ? news.summary : news.summary_en
-  const isTop3 = (typeof news.rank === 'number' ? news.rank : parseInt(news.rank.toString())) <= 3
+  const summary = language.code === 'th' ? news.summary : (news.summary_en || news.summary)
+  const storyIsTop3 = isTop3(news)
+  const imageSelection = selectCardImage(news, { isTop3: storyIsTop3 })
+  
+  // Debug logging (temporary)
+  debugImageSelection(news, undefined, 'NewsCard', imageSelection)
+
+  // Debug logging for second story image issue
+  useEffect(() => {
+    if (news.rank === 2) {
+      console.log('🐛 SECOND STORY DEBUG:', {
+        rank: news.rank,
+        title: news.title?.substring(0, 40) + '...',
+        ai_image_url: news.isAIImage ? news.displayImageUrl : null,
+        display_image_url: news.displayImageUrl,
+        video_id: news.video_id,
+        hasAiImage: news.isAIImage,
+        hasDisplayImage: news.displayImageUrl && news.displayImageUrl !== '/placeholder-image.svg',
+        imageError: imageError,
+        isTop3: storyIsTop3,
+        finalImageUrl: news.displayImageUrl
+      })
+    }
+  }, [news.rank, news.isAIImage, news.displayImageUrl, imageError, storyIsTop3])
 
   return (
-    <article className={`news-card p-6 ${isTop3 ? 'ring-2 ring-accent-200 dark:ring-accent-800' : ''}`}>
+    <article className={`news-card p-6 ${storyIsTop3 ? 'ring-2 ring-accent-200 dark:ring-accent-800' : ''}`}>
       {/* Top banner for top 3 */}
-      {isTop3 && (
+      {storyIsTop3 && (
         <div className="flex items-center gap-2 mb-4 -mt-2 -mx-2 px-4 py-2 bg-gradient-to-r from-accent-500 to-thai-500 text-white rounded-t-2xl">
           <Star className="w-4 h-4" />
           <span className="text-sm font-semibold">
@@ -111,11 +139,11 @@ export function NewsCard({ news, index }: NewsCardProps) {
             <div className="flex items-center gap-2 text-sm text-concrete-600 dark:text-concrete-400">
               <span className="font-medium">#{news.rank}</span>
               <span>•</span>
-              <span>{news.channel}</span>
+              <span>{news.channelTitle}</span>
               <span>•</span>
               <div className="flex items-center gap-1">
                 <Calendar className="w-4 h-4" />
-                {formatDate(news.published_date)}
+                {formatDate(news.publishedAt || '')}
               </div>
             </div>
             
@@ -129,65 +157,60 @@ export function NewsCard({ news, index }: NewsCardProps) {
               </div>
               <div className="flex items-center gap-1">
                 <ThumbsUp className="w-4 h-4" />
-                <span>{formatNumber(news.like_count)}</span>
+                <span>{formatNumber(news.likes)}</span>
               </div>
               <div className="flex items-center gap-1">
                 <MessageCircle className="w-4 h-4" />
-                <span>{formatNumber(news.comment_count)}</span>
+                <span>{formatNumber(news.comments)}</span>
               </div>
             </div>
           </div>
           
-          {/* Popularity score */}
-          <div className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg ${getPopularityBg(news.popularity_score)}`}>
-            <div className={`text-2xl font-bold ${getPopularityColor(news.popularity_score)}`}>
-              {Math.round(news.popularity_score_precise || news.popularity_score)}
+          {/* Popularity score with subtext */}
+                     <div className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg ${getPopularityBg(news.popularityScore)} min-w-[100px]`}>
+                         <div className={`text-2xl font-bold ${getPopularityColor(news.popularityScore)}`}>
+              {news.popularityScore.toFixed(1)}
             </div>
             <div className="text-xs text-concrete-600 dark:text-concrete-400">
               /100
             </div>
+            {/* Subtext lines */}
+            <div className="text-xs text-center mt-1 text-concrete-700 dark:text-concrete-300 max-w-[150px] space-y-0.5">
+              <div>{getPopularitySubtext(news)}</div>
+            </div>
           </div>
         </div>
 
-        {/* AI Image (for top 3) */}
-        {isTop3 && news.ai_image_url && (
-          <div className="relative">
-            <div 
-              className="aspect-video bg-concrete-100 dark:bg-void-800 rounded-lg overflow-hidden cursor-pointer hover:scale-[1.02] transition-transform"
-              onClick={handleImageClick}
-            >
-              {!imageError ? (
-                <img
-                  src={news.ai_image_url}
-                  alt={`AI illustration for: ${news.title}`}
-                  className="w-full h-full object-cover"
-                  onError={() => setImageError(true)}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-concrete-200 dark:bg-void-700 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <svg className="w-8 h-8 text-concrete-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-concrete-500">AI Image</p>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* AI badge */}
-            <div className="absolute top-3 left-3 px-2 py-1 bg-black/50 text-white text-xs rounded-full backdrop-blur-sm">
-              🤖 AI Generated
-            </div>
+        {/* Image Section - show for all items with graceful fallback */}
+        <div className="relative">
+          <div 
+            className="aspect-video bg-concrete-100 dark:bg-void-800 rounded-lg overflow-hidden"
+          >
+            <img
+              src={news.displayImageUrl}
+              alt={`Illustration for: ${news.title}`}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                console.warn(`Image load failed for story #${news.rank}, using placeholder`);
+                (e.currentTarget as HTMLImageElement).src = '/placeholder-image.svg';
+              }}
+            />
           </div>
-        )}
+            
+          {/* AI-Generated Badge - Only show for top 3 with AI images */}
+          {storyIsTop3 && news.isAIImage && (
+            <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-full backdrop-blur-sm border border-white/20">
+              <span className="flex items-center gap-1">
+                🤖 <span className="font-medium">AI-Generated</span>
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Category */}
         <div className="flex items-center gap-2">
           <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-full">
-            {getText(news.auto_category, language.code)}
+            {getText(news.category || 'general', language.code)}
           </span>
         </div>
 

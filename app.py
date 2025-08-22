@@ -3452,64 +3452,98 @@ def main():
 
 def generate_editorial_illustration_prompt(news_item: Dict[str, Any]) -> str:
     """
-    Generate an editorial-style illustration prompt based on news content.
+    Generate intelligent, context-aware editorial illustration prompts.
+    Uses auto_category and content analysis to create category-specific prompts
+    that accurately reflect the type of content (games, sports, music, etc.).
+    This function provides fallback prompts for manual image creation in the UI.
     
     Args:
-        news_item: Dictionary containing news data
+        news_item: Dictionary containing news data with title, summary, auto_category, etc.
         
     Returns:
-        Detailed prompt for creating editorial-style illustration
+        Context-specific prompt for creating editorial-style illustration
     """
     # Get news details
     title = news_item.get('title', '').lower()
     summary = news_item.get('summary', '').lower()
+    summary_en = news_item.get('summary_en', '').lower()
+    channel = news_item.get('channel', '').lower()
     category = news_item.get('auto_category', 'Uncategorized')
     
+    # Combine content for analysis
+    combined_content = f"{title} {summary} {summary_en} {channel}"
+    
     # Base prompt template
-    base_prompt = "An editorial-style illustration representing trending Thai news. "
+    base_prompt = "Editorial-style illustration for trending Thai news: "
     
-    # Category-specific illustration prompts
-    if "กีฬา (Sports)" in category:
-        if any(keyword in title + summary for keyword in ['วอลเลย์บอล', 'volleyball', 'ไทย พบ', 'vs']):
-            return f"{base_prompt}Symbolic volleyball court with Thai flag elements, players silhouettes in action, sports arena atmosphere. Clean geometric design with dynamic movement lines. White background, newspaper graphic style, respectful representation of Thai sports achievement."
+    # Use category-based intelligent prompts
+    if "เกม/อนิเมะ (Games/Anime)" in category:
+        # Specific game detection
+        if any(game in combined_content for game in ['honkai star rail', 'honkai: star rail', 'hsr']):
+            return f"{base_prompt}Futuristic space adventure scene with starships and cosmic landscapes. Sci-fi aesthetic with star trains and galaxy backgrounds. Anime-style character silhouettes in space exploration setting. Clean editorial illustration style."
         
-        elif any(keyword in title + summary for keyword in ['ฟุตบอล', 'football', 'เชลซี', 'ลิเวอร์พูล', 'premier league']):
-            return f"{base_prompt}Abstract football/soccer field with geometric ball and goal posts, dynamic action lines suggesting movement and competition. Minimalist sports symbols, clean newspaper illustration style. White background, no logos or faces."
+        elif any(game in combined_content for game in ['genshin impact', 'genshin', 'teyvat']):
+            return f"{base_prompt}Fantasy adventure landscape with magical elements and floating islands. Mystical world with elemental symbols and ancient architecture. Anime-style fantasy aesthetic with magical crystals and enchanted environments."
+        
+        elif any(game in combined_content for game in ['rov', 'realm of valor', 'mobile legends']):
+            return f"{base_prompt}MOBA battle arena with strategic game elements. Fantasy heroes and competitive gaming symbols. Esports tournament atmosphere with game interface elements and tactical visualization."
+        
+        elif any(term in combined_content for term in ['minecraft', 'roblox']):
+            return f"{base_prompt}Block-building creative world with pixelated geometric structures. Family-friendly gaming environment with construction elements and colorful landscapes. Creative sandbox aesthetic."
+        
+        elif any(term in combined_content for term in ['trailer', 'character trailer', 'gameplay']):
+            return f"{base_prompt}Game promotional scene with dynamic character action. Cinematic gaming aesthetic with special effects and polished visual presentation. Professional game marketing style."
         
         else:
-            return f"{base_prompt}Generic sports symbols - trophy, medal, or athletic equipment in minimalist design. Dynamic geometric shapes suggesting competition and achievement. Clean editorial style, white background."
+            return f"{base_prompt}Modern gaming culture with controllers and digital entertainment elements. Contemporary gaming lifestyle with monitors and interactive technology. Clean gaming aesthetic."
     
-    elif "บันเทิง (Entertainment)" in category or "เกม/อนิเมะ (Games/Anime)" in category:
-        if any(keyword in title + summary for keyword in ['blackpink', 'music', 'mv', 'เพลง']):
-            return f"{base_prompt}Abstract music-themed illustration with stylized musical notes, sound waves, and stage lighting effects. Geometric microphone or concert stage silhouette. Vibrant but clean design, newspaper graphic style, white background."
+    elif "กีฬา (Sports)" in category:
+        if any(sport in combined_content for sport in ['volleyball', 'วอลเลย์บอล', 'vnl']):
+            return f"{base_prompt}Volleyball competition scene with players in action poses. Professional court with net and team coordination. International tournament atmosphere with sporting excellence."
         
-        elif any(keyword in title + summary for keyword in ['minecraft', 'gaming', 'เกม', 'beatbox']):
-            return f"{base_prompt}Abstract gaming-themed illustration with geometric pixel art elements, controller silhouettes, or digital interface symbols. Clean, modern design representing digital entertainment. White background, newspaper style."
+        elif any(sport in combined_content for sport in ['football', 'ฟุตบอล', 'soccer']):
+            return f"{base_prompt}Football/soccer match with players in competitive action. Stadium environment with goals and strategic team play. Athletic performance and sportsmanship focus."
         
-        elif any(keyword in title + summary for keyword in ['anime', 'อนิเมะ', 'gachiakuta']):
-            return f"{base_prompt}Stylized anime-inspired geometric shapes, comic book style speech bubbles or panels, Japanese cultural elements in abstract form. Clean illustration style, respectful cultural representation, white background."
+        elif any(sport in combined_content for sport in ['basketball', 'บาสเกตบอล']):
+            return f"{base_prompt}Basketball game with dynamic shooting and defensive action. Indoor court with hoops and fast-paced athletic movement. Team strategy and individual excellence."
         
         else:
-            return f"{base_prompt}Abstract entertainment symbols - stage lights, curtains, or performance elements in geometric design. Clean editorial illustration, white background."
+            return f"{base_prompt}Athletic competition with sporting excellence and teamwork. Professional sports venue with athletes demonstrating skill. Competitive spirit and achievement focus."
+    
+    elif "บันเทิง (Entertainment)" in category:
+        # Music content
+        if any(term in combined_content for term in ['official mv', 'music video', 'mv', 'เพลง', 'song', 'artist', 'singer']):
+            return f"{base_prompt}Music performance with stage lighting and concert atmosphere. Artists performing with instruments and sound equipment. Live music energy and audience engagement."
+        
+        # Movie/Film content
+        elif any(term in combined_content for term in ['movie', 'film', 'cinema', 'trailer', 'premiere']):
+            return f"{base_prompt}Film industry scene with movie production elements. Professional film set with cameras and lighting equipment. Cinematic atmosphere with artistic direction."
+        
+        # TV/Series content
+        elif any(term in combined_content for term in ['series', 'ซีรีส์', 'drama', 'ละคร', 'episode']):
+            return f"{base_prompt}Television production with dramatic storytelling elements. Professional TV studio with filming equipment. Actors in character with compelling performances."
+        
+        else:
+            return f"{base_prompt}Entertainment industry with creative performance and artistic expression. Professional venue with stage elements and audience engagement."
     
     elif "การเมือง/ข่าวทั่วไป (Politics/General News)" in category:
-        return f"{base_prompt}Abstract governmental or civic symbols - capitol building silhouette, scales of justice, or democratic icons in clean geometric form. Respectful representation of political discourse, newspaper editorial style, white background."
+        return f"{base_prompt}News reporting scene with journalists and press conference setting. Professional media environment with microphones and cameras. Democratic discourse and information sharing."
     
     elif "การศึกษา (Education)" in category:
-        return f"{base_prompt}Educational symbols in abstract form - books, graduation cap, blackboard, or learning icons. Clean academic illustration style, geometric design, white background, newspaper graphic aesthetic."
+        return f"{base_prompt}Educational environment with learning and knowledge sharing. Modern classroom with students and teaching materials. Academic excellence and educational achievement."
     
     elif "ไลฟ์สไตล์ (Lifestyle)" in category:
-        return f"{base_prompt}Lifestyle-themed abstract illustration - coffee cup, travel icons, fashion elements, or daily life symbols in geometric form. Clean, modern design representing contemporary living, white background."
+        return f"{base_prompt}Lifestyle and daily living with modern life activities. Contemporary choices and personal wellness themes. Quality of life and lifestyle trends."
     
-    elif "ธุรกิจ / การเงิน (Business / Finance)" in category:
-        return f"{base_prompt}Business and finance symbols in abstract form - graph arrows, currency symbols, calculator, or market indicators. Clean geometric design, professional editorial style, white background."
+    elif "ธุรกิจ/การเงิน (Business/Finance)" in category:
+        return f"{base_prompt}Business and finance with professional corporate environment. Modern office with meetings and financial planning. Economic growth and business success."
     
     elif "สุขภาพ (Health)" in category:
-        return f"{base_prompt}Health and wellness symbols - medical cross, heart symbol, fitness icons, or wellness elements in clean geometric design. Respectful health-themed illustration, newspaper style, white background."
+        return f"{base_prompt}Healthcare with medical professionals and modern facilities. Clean medical environment with healthcare workers. Health and wellness focus with professional care."
     
     else:
         # Generic news illustration
-        return f"{base_prompt}General news symbols in abstract form - newspaper icons, information symbols, or communication elements. Clean geometric design representing information sharing and media, white background, editorial newspaper style."
+        return f"{base_prompt}General news scene depicting the described activity. Professional journalism with information sharing and media coverage. Editorial newspaper illustration style."
 
 def get_illustration_style_css() -> str:
     """Get CSS for illustration placeholder styling"""
@@ -4389,7 +4423,22 @@ def assign_smart_category(item):
         'gaming stream', 'สตรีมเกม', 'game broadcast', 'ถ่ายทอดเกม',
         'rov', 'realm of valor', 'เรียลโอฟวาเลอร์', 'ฟรีไฟร์',
         'โมบายเลเจนด์', 'วาโลแรนต์', 'ลีกออฟเลเจนด์', 'แอลโอแอล',
-
+        
+        # HIGH PRIORITY: Popular games that are often misclassified
+        'honkai star rail', 'honkai: star rail', 'honkai', 'star rail', 'hsr',
+        'genshin impact', 'genshin', 'mihoyo', 'hoyoverse', 'teyvat',
+        'trailblazer', 'stellaron', 'jarilo', 'belobog', 'luofu',
+        'wuthering waves', 'wuwa', 'kuro games', 'punishing gray raven',
+        'azure lane', 'arknights', 'girls frontline', 'epic seven',
+        'fate grand order', 'fgo', 'granblue fantasy', 'gbf',
+        'final fantasy', 'ff', 'ff14', 'ffxiv', 'final fantasy xiv',
+        
+        # Game-specific terms that should override entertainment
+        'character trailer', 'game trailer', 'gameplay trailer', 'combat showcase',
+        'skill showcase', 'ultimate showcase', 'character guide', 'build guide',
+        'gacha', 'pull', 'summon', 'banner', 'limited banner', 'rate up',
+        'tier list', 'meta', 'artifact', 'weapon', 'constellation', 'eidolon',
+        'relic', 'lightcone', 'team comp', 'rotation', 'dps', 'support',
         
         # Popular AAA games and franchises
         'marvel rivals', 'rivals', 'superhero', 'ซูเปอร์ฮีโร่', 'marvel', 'dc comics',
@@ -4401,7 +4450,7 @@ def assign_smart_category(item):
         
         # Mobile and casual games
         'roblox', 'minecraft', 'among us', 'fall guys', 'pokemon', 'โปเกมอน',
-        'genshin impact', 'mobile legends', 'free fire', 'clash of clans',
+        'mobile legends', 'free fire', 'clash of clans',
         'clash royale', 'brawl stars', 'candy crush', 'subway surfers',
         
         # Nintendo games
@@ -4508,14 +4557,28 @@ def assign_smart_category(item):
         
         return total_score, matched_keywords, source_fields, field_scores
     
-    # Enhanced field weights with channel getting higher priority
-    field_weights = {
-        'title': (title, 3),          # Title gets 3x weight
-        'channel': (channel, 2.5),    # Channel gets 2.5x weight (increased)
-        'summary_en': (summary_en, 2), # English summary gets 2x weight
-        'summary': (summary, 1.5),    # Thai summary gets 1.5x weight
-        'description': (description, 1) # Description gets 1x weight
-    }
+    # Enhanced field weights with priority boost for gaming content
+    def get_field_weights_for_category(category):
+        """Get field weights that can be adjusted based on category type"""
+        base_weights = {
+            'title': (title, 3),          # Title gets 3x weight
+            'channel': (channel, 2.5),    # Channel gets 2.5x weight (increased)
+            'summary_en': (summary_en, 2), # English summary gets 2x weight
+            'summary': (summary, 1.5),    # Thai summary gets 1.5x weight
+            'description': (description, 1) # Description gets 1x weight
+        }
+        
+        # Boost gaming keyword detection with higher weights
+        if category == 'เกม/อนิเมะ (Games/Anime)':
+            return {
+                'title': (title, 4),          # Higher title weight for gaming
+                'channel': (channel, 3.5),    # Much higher channel weight for gaming  
+                'summary_en': (summary_en, 2.5), # Higher summary weight for gaming
+                'summary': (summary, 2),      # Higher Thai summary weight
+                'description': (description, 1.5) # Higher description weight
+            }
+        
+        return base_weights
     
     # Score each category with enhanced weighted scoring
     category_scores = {}
@@ -4528,6 +4591,9 @@ def assign_smart_category(item):
             if not is_gaming_but_not_music(title, channel):
                 logger.info(f"🎵 Gaming Exclusion: Skipping Games/Anime classification due to music indicators")
                 continue
+        
+        # Get appropriate field weights for this category
+        field_weights = get_field_weights_for_category(category)
         
         score, matched_keywords, source_fields, field_scores = calculate_weighted_score(keywords, field_weights)
         if score > 0:
@@ -4553,17 +4619,24 @@ def assign_smart_category(item):
         
         return best_category
     
-    # Enhanced fallback rules with comprehensive channel patterns
+    # Enhanced fallback rules with comprehensive channel patterns and GAME PRIORITY
     enhanced_fallback_rules = [
-        # Gaming channels and patterns
-        (['gaming', 'games', 'gamer', 'twitch', 'youtube gaming', 'gamespot', 'ign', 
-          'pc gaming', 'mobile gaming', 'esports', 'speedrun', 'walkthrough'], 
+        # HIGH PRIORITY: Game company/publisher channels (check first)
+        (['honkai star rail', 'honkai: star rail', 'genshin impact', 'mihoyo', 'hoyoverse',
+          'riot games', 'valve', 'blizzard', 'activision', 'ubisoft', 'ea games',
+          'nintendo', 'playstation', 'xbox', 'steam', 'epic games', 'garena'],
          'เกม/อนิเมะ (Games/Anime)'),
         
-        # Entertainment, music, and streaming channels
+        # Gaming channels and patterns
+        (['gaming', 'games', 'gamer', 'twitch', 'youtube gaming', 'gamespot', 'ign', 
+          'pc gaming', 'mobile gaming', 'esports', 'speedrun', 'walkthrough',
+          'pro player', 'competitive gaming', 'game review', 'game guide'], 
+         'เกม/อนิเมะ (Games/Anime)'),
+        
+        # Entertainment, music, and streaming channels (but LOWER priority than gaming)
         (['music', 'records', 'entertainment', 'tv', 'media', 'netflix', 'disney', 'hbo',
           'paramount', 'warner', 'universal', 'sony pictures', 'mgm', 'streaming',
-          'trailer', 'movie', 'film', 'series', 'drama', 'official', 'gmmtv',
+          'movie', 'film', 'series', 'drama', 'gmmtv',
           'rs music', 'kamikaze', 'spicy disc', 'what the duck', 'sony music',
           'universal music', 'warner music', 'emi music', 'capitol records'], 
          'บันเทิง (Entertainment)'),
@@ -4598,14 +4671,23 @@ def assign_smart_category(item):
             logger.info(f"   Channel: '{channel}'")
             return category
     
-    # Additional fallback - check for strong title indicators
+    # Additional fallback - check for strong title indicators with GAME PRIORITY
     title_fallback_rules = [
-        # Gaming titles with specific patterns
-        (['gameplay', 'walkthrough', 'speedrun', 'gaming', "let's play", 'mod', 'beta'], 
+        # HIGH PRIORITY: Known game names in titles (check first)
+        (['honkai star rail', 'honkai: star rail', 'genshin impact', 'rov', 'realm of valor',
+          'mobile legends', 'pubg', 'valorant', 'league of legends', 'dota', 'call of duty',
+          'fortnite', 'apex legends', 'overwatch', 'fifa', 'pokemon', 'minecraft',
+          'final fantasy', 'character trailer', 'game trailer', 'gameplay trailer'],
          'เกม/อนิเมะ (Games/Anime)'),
         
-        # Entertainment and music titles
-        (['trailer', 'official mv', 'music video', 'concert', 'live performance', 'behind the scenes',
+        # Gaming titles with specific patterns  
+        (['gameplay', 'walkthrough', 'speedrun', 'gaming', "let's play", 'mod', 'beta',
+          'game review', 'เกม', 'guide', 'tips', 'tricks', 'build guide', 'tier list',
+          'gacha', 'pull', 'summon', 'banner', 'meta', 'dps', 'support', 'rank', 'pro player'], 
+         'เกม/อนิเมะ (Games/Anime)'),
+        
+        # Entertainment and music titles (BUT check for game exclusions first)
+        (['official mv', 'music video', 'concert', 'live performance', 'behind the scenes',
           'lyrics', 'lyric', 'audio', 'cover', 'acoustic', 'remix', 'feat', 'featuring',
           'single', 'album', 'song', 'live version', 'official audio'], 
          'บันเทิง (Entertainment)'),
@@ -4614,6 +4696,28 @@ def assign_smart_category(item):
         (['vs', 'match', 'championship', 'tournament', 'league', 'world cup'], 
          'กีฬา (Sports)'),
     ]
+    
+    # CRITICAL: Add special logic for game trailers that might be marked as entertainment
+    def is_game_trailer(title_text, channel_text):
+        """Special detection for game trailers that might be confused with entertainment"""
+        game_trailer_indicators = [
+            'character trailer', 'game trailer', 'gameplay trailer', 'honkai', 'genshin',
+            'rov', 'mobile legends', 'valorant', 'league of legends', 'final fantasy',
+            'trailblazer', 'star rail', 'mihoyo', 'hoyoverse', 'riot games'
+        ]
+        
+        combined_text = f"{title_text} {channel_text}".lower()
+        
+        for indicator in game_trailer_indicators:
+            if indicator in combined_text:
+                return True
+        return False
+    
+    # Check for game trailers BEFORE applying other fallback rules
+    if is_game_trailer(title, channel):
+        logger.info(f"🎮 Game Trailer Detection: '{item.get('title', 'Unknown')[:50]}...' → เกม/อนิเมะ (Games/Anime)")
+        logger.info(f"   Detected as game trailer based on title/channel content")
+        return 'เกม/อนิเมะ (Games/Anime)'
     
     for patterns, category in title_fallback_rules:
         matched_patterns = [pattern for pattern in patterns if pattern in title]

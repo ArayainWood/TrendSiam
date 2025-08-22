@@ -15,14 +15,15 @@ export function StatsOverview() {
 
   // Calculate statistics
   const totalNews = filteredNews.length
-  const avgPopularity = filteredNews.reduce((sum, item) => sum + (item.popularity_score_precise || item.popularity_score), 0) / totalNews
-  const totalViews = filteredNews.reduce((sum, item) => {
-    const views = parseInt(item.view_count.replace(/,/g, '')) || 0
+  const avgPopularity = totalNews > 0 ? filteredNews.reduce((sum: number, item) => sum + (item.popularity_score_precise || item.popularityScore || 0), 0) / totalNews : 0
+  const totalViews = filteredNews.reduce((sum: number, item) => {
+    const viewCount = typeof item.view_count === 'string' ? item.view_count.replace(/,/g, '') : String(item.views || item.view_count || 0);
+    const views = parseInt(viewCount) || 0;
     return sum + views
   }, 0)
   const topCategories = Object.entries(
     filteredNews.reduce((acc, item) => {
-      const category = item.auto_category
+      const category = item.auto_category || item.category || 'Unknown'
       acc[category] = (acc[category] || 0) + 1
       return acc
     }, {} as Record<string, number>)
@@ -30,7 +31,8 @@ export function StatsOverview() {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
 
-  const formatNumber = (num: number) => {
+  const formatNumber = (num: number | null | undefined) => {
+    if (!num || isNaN(num)) return '0'
     if (num >= 1000000) {
       return `${(num / 1000000).toFixed(1)}M`
     } else if (num >= 1000) {
@@ -42,7 +44,7 @@ export function StatsOverview() {
   const stats = [
     {
       label: getText('total_stories', language.code),
-      value: totalNews.toLocaleString(),
+      value: (totalNews || 0).toLocaleString(),
       icon: BarChart3,
       color: 'text-blue-600 dark:text-blue-400',
       bgColor: 'bg-blue-100 dark:bg-blue-900/30',
