@@ -7,7 +7,7 @@ import { useUIStore } from '../../stores/uiStore'
 import { FilterState } from '../../types'
 
 export function FilterPanel() {
-  const { news, filterNews } = useNewsStore()
+  const { news, updateFilters } = useNewsStore()
   const { language } = useUIStore()
   const [isExpanded, setIsExpanded] = useState(false)
   const [filters, setFilters] = useState<FilterState>({
@@ -31,18 +31,18 @@ export function FilterPanel() {
   const updateFilter = (key: keyof FilterState, value: string) => {
     const newFilters = { ...filters, [key]: value }
     setFilters(newFilters)
-    filterNews(newFilters)
+    updateFilters(newFilters)
   }
 
-  const clearFilters = () => {
+    const clearFilters = () => {
     const clearedFilters: FilterState = {
       platform: 'all',
-      category: 'all', 
+      category: 'all',
       date: 'all',
       searchQuery: ''
     }
     setFilters(clearedFilters)
-    filterNews(clearedFilters)
+    updateFilters(clearedFilters)
   }
 
   const hasActiveFilters = filters.platform !== 'all' || 

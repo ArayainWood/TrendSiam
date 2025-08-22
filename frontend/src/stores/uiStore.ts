@@ -47,7 +47,7 @@ export const useUIStore = create<UIStore>()(
       developerMode: false,
       currentPage: 'main',
       filters: defaultFilters,
-      language: languages[0], // Default to Thai
+      language: languages[0]!, // Default to Thai
       theme: themes.dark, // Default to dark theme
 
       // Developer mode actions
@@ -70,7 +70,7 @@ export const useUIStore = create<UIStore>()(
         const { language } = get()
         const currentIndex = languages.findIndex(lang => lang.code === language.code)
         const nextIndex = (currentIndex + 1) % languages.length
-        set({ language: languages[nextIndex] })
+        set({ language: languages[nextIndex]! })
       },
 
       // Theme actions

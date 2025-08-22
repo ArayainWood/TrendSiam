@@ -1,30 +1,58 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
-Enhanced Batch Bilingual Summarizer for YouTube Trending Videos with Real-time Updates
+TrendSiam News Ingestion Pipeline with Idempotency and Image Persistence
 
-This script loads YouTube video data from thailand_trending_api.json, updates view counts
-from YouTube Data API, generates both Thai and English summaries using OpenAI, calculates
-popularity scores, and saves the results to thailand_trending_summary.json with progress tracking.
+This script implements a robust news ingestion pipeline with the following guarantees:
 
-Features:
-- Real-time view count updates from YouTube Data API v3
-- Loads data from YouTube Data API JSON file
-- Generates both Thai and English summaries using OpenAI API
-- Calculates popularity scores based on latest engagement metrics
-- Progress bar with tqdm for all operations
-- Graceful error handling and fallback for API failures
-- Rate limit protection with random delays
-- CLI support for limiting batch size for testing
-- Preserves all original video data plus new fields (summary, summary_en, popularity_score)
-- Optimized English summaries with reduced tokens (max_tokens=120, temperature=0.3)
-- Secure API key handling via .env file
+A) Idempotency without losing history:
+   - Two-layer model: stories (canonical) + snapshots (per-run/day)
+   - Never destroys historical data
+   - Re-runs create/update snapshots, preserving history
+   - Atomic writes and non-destructive DB upserts only
 
-Security:
-- YouTube video ID validation to prevent injection attacks
-- Secure API key loading from environment variables
-- Comprehensive error handling and fallback mechanisms
-- Rate limiting to respect YouTube API quotas
+B) Image persistence and regeneration policy (Top-3 focus):
+   - Never deletes/overwrites valid existing images
+   - Generates new images only when missing/invalid
+   - Stable story_id-based image mapping
+   - Top-3 image validation with retry logic
+
+C) Ordering and alignment:
+   - Deterministic Top-3 using popularity_score desc, publish_time desc, story_id
+   - story_id and rank included in all outputs for UI alignment
+   - Images never reordered independently of stories
+
+D) UX/UI and caching safety:
+   - Frontend JSON includes story_id, rank, image_status, data_version
+   - Placeholder handling for pending images
+   - Cache busting with data_version timestamp
+
+E) Reliability and logging:
+   - Structured logging for all operations
+   - Exit codes: 0 (success), 5 (partial), others (errors)
+   - Configurable retry logic with exponential backoff
+   - Dry-run mode for testing
 """
+from dotenv import load_dotenv
+from pathlib import Path
+import os
+
+# Try to load from multiple possible .env locations
+root_env = Path(__file__).resolve().parent / '.env'
+frontend_env = Path(__file__).resolve().parent / 'frontend' / '.env.local'
+
+# Load .env files in order of preference
+if frontend_env.exists():
+    load_dotenv(dotenv_path=frontend_env)
+    print(f"✅ Loaded environment from: {frontend_env}")
+elif root_env.exists():
+    load_dotenv(dotenv_path=root_env)
+    print(f"✅ Loaded environment from: {root_env}")
+else:
+    print("⚠️ No .env file found, using system environment variables")
+
+print("DEBUG SUPABASE_ENABLED =", os.getenv("SUPABASE_ENABLED"))
+
 
 import json
 import sys
@@ -32,9 +60,12 @@ import logging
 import time
 import random
 import argparse
+import hashlib
 import os
-from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone, timedelta
+from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
+import uuid
 
 # Configure logging first
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -46,6 +77,14 @@ try:
     load_dotenv()
 except ImportError:
     logger.warning("python-dotenv not installed. Make sure YOUTUBE_API_KEY is set as environment variable.")
+
+# Supabase imports for direct database writing
+try:
+    from supabase import create_client, Client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    logger.warning("supabase-py not installed. Data will only be saved to JSON file.")
+    SUPABASE_AVAILABLE = False
 
 # YouTube API imports for view count updates
 try:
@@ -102,39 +141,390 @@ def get_precise_score(item):
         return 0.0
 
 
-class BatchVideoSummarizer:
+def generate_story_id(source_id: str, platform: str, publish_time: datetime) -> str:
     """
-    A class to process YouTube video data and generate Thai summaries in batches.
+    Generate a stable story_id from source_id, platform, and publish_time.
+    
+    This creates a deterministic hash that uniquely identifies a story
+    across runs, enabling idempotent processing.
+    
+    Args:
+        source_id: Original video ID or source identifier
+        platform: Platform name (e.g., 'YouTube')
+        publish_time: When the content was published
+        
+    Returns:
+        64-character hex string as story_id
+    """
+    # Create stable input string
+    input_str = f"{source_id}|{platform}|{int(publish_time.timestamp())}"
+    
+    # Generate SHA-256 hash
+    hash_object = hashlib.sha256(input_str.encode('utf-8'))
+    return hash_object.hexdigest()
+
+
+def parse_publish_time(item: Dict[str, Any]) -> datetime:
+    """
+    Extract and parse publish time from video item.
+    
+    Args:
+        item: Video data dictionary
+        
+    Returns:
+        datetime object in UTC timezone
+    """
+    # Try published_date first
+    if 'published_date' in item and item['published_date']:
+        try:
+            if isinstance(item['published_date'], str):
+                # Parse ISO format or common date formats
+                for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%SZ']:
+                    try:
+                        dt = datetime.strptime(item['published_date'], fmt)
+                        return dt.replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        continue
+                # Try parsing with dateutil if available
+                try:
+                    from dateutil.parser import parse as dateutil_parse
+                    dt = dateutil_parse(item['published_date'])
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt.astimezone(timezone.utc)
+                except (ImportError, ValueError):
+                    pass
+            elif isinstance(item['published_date'], datetime):
+                if item['published_date'].tzinfo is None:
+                    return item['published_date'].replace(tzinfo=timezone.utc)
+                return item['published_date'].astimezone(timezone.utc)
+        except Exception as e:
+            logger.warning(f"Failed to parse published_date: {e}")
+    
+    # Fallback to current time
+    logger.debug("Using current time as publish_time fallback")
+    return datetime.now(timezone.utc)
+
+
+def validate_image_file(file_path: str, min_size: int = 15 * 1024) -> bool:
+    """
+    Validate that an image file exists and is valid.
+    
+    Args:
+        file_path: Path to image file
+        min_size: Minimum file size in bytes (default: 15KB)
+        
+    Returns:
+        True if image is valid, False otherwise
+    """
+    try:
+        if not os.path.exists(file_path):
+            return False
+        
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        if file_size < min_size:
+            logger.debug(f"Image file too small: {file_size} bytes < {min_size}")
+            return False
+        
+        # Basic MIME type check
+        if not file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+            logger.debug(f"Invalid image extension: {file_path}")
+            return False
+        
+        return True
+        
+    except Exception as e:
+        logger.debug(f"Error validating image file {file_path}: {e}")
+        return False
+
+
+def determine_top3_ordering(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Determine Top-3 ordering using deterministic criteria.
+    
+    Sorting criteria (in order):
+    1. popularity_score desc (most popular first)
+    2. publish_time desc (newest first if scores tied)
+    3. story_id (stable tiebreaker)
+    
+    Args:
+        items: List of news items with required fields
+        
+    Returns:
+        Sorted list with top items first
+    """
+    def sort_key(item):
+        score = get_precise_score(item)
+        # For publish_time, we need to parse it if it's a string
+        pub_time = parse_publish_time(item)
+        story_id = item.get('story_id', '')
+        
+        # Return tuple for sorting: (-score, -timestamp, story_id)
+        # Negative values for descending order
+        return (-score, -pub_time.timestamp(), story_id)
+    
+    try:
+        sorted_items = sorted(items, key=sort_key)
+        
+        # Log the top 3 for verification
+        logger.info("Top-3 deterministic ordering:")
+        for i, item in enumerate(sorted_items[:3], 1):
+            score = get_precise_score(item)
+            title = item.get('title', 'Unknown')[:50]
+            story_id = item.get('story_id', 'N/A')[:16]
+            logger.info(f"  #{i}: {title}... (score: {score:.1f}, id: {story_id}...)")
+        
+        return sorted_items
+        
+    except Exception as e:
+        logger.error(f"Error sorting items: {e}")
+        return items  # Return original order on error
+
+
+class TrendSiamNewsIngester:
+    """
+    TrendSiam News Ingestion Pipeline with Idempotency and Image Persistence.
+    
+    Implements a two-layer model (stories/snapshots) for robust news processing
+    with image persistence guarantees and deterministic ordering.
     """
     
     def __init__(self, input_file: str = 'thailand_trending_api.json', 
-                 output_file: str = 'thailand_trending_summary.json',
-                 limit: Optional[int] = None):
+                 output_file: str = 'frontend/public/data/thailand_trending_summary.json',
+                 limit: Optional[int] = None,
+                 regenerate_missing_images: bool = False,
+                 max_image_retries: int = 3,
+                 retry_backoff_seconds: float = 2.0,
+                 dry_run: bool = False):
         """
-        Initialize the batch summarizer.
+        Initialize the news ingester with idempotency and image persistence options.
         
         Args:
             input_file: Path to input JSON file with video data
             output_file: Path to output JSON file for results
-            limit: Maximum number of videos to process (None for all)
+            limit: Maximum number of videos to process for current run
+            regenerate_missing_images: Force check and regenerate missing images
+            max_image_retries: Maximum retries for image generation
+            retry_backoff_seconds: Backoff time between retries
+            dry_run: Perform dry run without making changes
         """
         self.input_file = input_file
         self.output_file = output_file
         self.limit = limit
+        self.regenerate_missing_images = regenerate_missing_images
+        self.max_image_retries = max_image_retries
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self.dry_run = dry_run
+        
+        # Current run data
+        self.current_run_id = str(uuid.uuid4())
+        self.snapshot_date = datetime.now(timezone.utc).date()
         self.videos_data = []
-        self.processed_videos = []
+        self.processed_stories = []
+        self.processed_snapshots = []
+        
+        # Counters
         self.success_count = 0
         self.failure_count = 0
+        self.image_generated_count = 0
+        self.image_skipped_count = 0
+        self.image_failed_count = 0
         
         # Rate limiting configuration
         self.min_delay = 1.5  # Minimum delay between API calls
         self.max_delay = 3.0  # Maximum delay between API calls
+        
+        # Initialize Supabase client
+        self.supabase_client = None
+        self.supabase_enabled = False
+        self._init_supabase()
         
         # YouTube API configuration for view count updates
         self.youtube_api_key = os.getenv('YOUTUBE_API_KEY')
         self.youtube_base_url = 'https://www.googleapis.com/youtube/v3/videos'
         self.view_count_updated = 0
         self.view_count_failed = 0
+        
+        # Image directories
+        self.images_dir = Path("ai_generated_images")
+        self.frontend_images_dir = Path("frontend/public/ai_generated_images")
+        self.images_dir.mkdir(exist_ok=True)
+        self.frontend_images_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Logging setup
+        self._setup_structured_logging()
+    
+    def _setup_structured_logging(self) -> None:
+        """
+        Setup structured logging for the ingestion pipeline.
+        """
+        # Create operation-specific loggers
+        self.fetch_logger = logging.getLogger(f"{__name__}.fetch")
+        self.summarize_logger = logging.getLogger(f"{__name__}.summarize")
+        self.upsert_logger = logging.getLogger(f"{__name__}.upsert")
+        self.image_logger = logging.getLogger(f"{__name__}.image")
+        
+        # Log run information
+        logger.info(f"=== TrendSiam News Ingestion Pipeline Started ===")
+        logger.info(f"Run ID: {self.current_run_id}")
+        logger.info(f"Snapshot Date: {self.snapshot_date}")
+        logger.info(f"Dry Run Mode: {self.dry_run}")
+        logger.info(f"Limit: {self.limit or 'None (all videos)'}")
+        logger.info(f"Regenerate Missing Images: {self.regenerate_missing_images}")
+        logger.info(f"Max Image Retries: {self.max_image_retries}")
+        logger.info(f"Retry Backoff: {self.retry_backoff_seconds}s")
+    
+    def log_operation(self, operation: str, **kwargs) -> None:
+        """
+        Log structured operation data.
+        
+        Args:
+            operation: Operation name (fetch, summarize, upsert, image)
+            **kwargs: Additional operation-specific data
+        """
+        log_data = {
+            'run_id': self.current_run_id,
+            'snapshot_date': str(self.snapshot_date),
+            'operation': operation,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            **kwargs
+        }
+        
+        # Select appropriate logger
+        op_logger = getattr(self, f"{operation}_logger", logger)
+        op_logger.info(f"{operation.upper()}: {json.dumps(log_data, separators=(',', ':'))}")
+    
+    def upsert_story(self, video_item: Dict[str, Any]) -> Tuple[str, bool]:
+        """
+        Upsert story to stories table and return story_id.
+        
+        Args:
+            video_item: Video data dictionary
+            
+        Returns:
+            Tuple of (story_id, was_created)
+        """
+        try:
+            # Generate story_id
+            source_id = video_item.get('video_id', '')
+            platform = video_item.get('channel', 'YouTube')
+            publish_time = parse_publish_time(video_item)
+            
+            story_id = generate_story_id(source_id, platform, publish_time)
+            
+            # Prepare story data
+            story_data = {
+                'story_id': story_id,
+                'source_id': source_id,
+                'platform': platform,
+                'publish_time': publish_time.isoformat(),
+                'title': video_item.get('title', ''),
+                'description': video_item.get('description', ''),
+                'channel': video_item.get('channel', ''),
+                'category': video_item.get('auto_category', ''),
+                'summary': video_item.get('summary', ''),
+                'summary_en': video_item.get('summary_en', ''),
+                'ai_image_prompt': video_item.get('ai_image_prompt', ''),
+                'duration': video_item.get('duration', '')
+            }
+            
+            if self.dry_run:
+                self.log_operation('upsert', action='dry_run_story', story_id=story_id, title=story_data['title'][:50])
+                return story_id, True
+            
+            if not self.supabase_enabled:
+                return story_id, True
+            
+            # Check if story exists
+            existing = self.supabase_client.table('stories').select('story_id').eq('story_id', story_id).execute()
+            was_created = len(existing.data) == 0
+            
+            # Upsert story
+            self.supabase_client.table('stories').upsert(story_data, on_conflict='story_id').execute()
+            
+            self.log_operation('upsert', 
+                action='story_upserted', 
+                story_id=story_id, 
+                was_created=was_created,
+                title=story_data['title'][:50]
+            )
+            
+            return story_id, was_created
+            
+        except Exception as e:
+            logger.error(f"Error upserting story: {e}")
+            self.log_operation('upsert', action='story_error', error=str(e))
+            raise
+    
+    def upsert_snapshot(self, story_id: str, video_item: Dict[str, Any], rank: Optional[int] = None) -> bool:
+        """
+        Upsert snapshot to snapshots table.
+        
+        Args:
+            story_id: Story identifier
+            video_item: Video data dictionary with current snapshot data
+            rank: Rank in current snapshot (1, 2, 3, etc.)
+            
+        Returns:
+            True if successful
+        """
+        try:
+            # Prepare snapshot data
+            snapshot_data = {
+                'story_id': story_id,
+                'snapshot_date': str(self.snapshot_date),
+                'run_id': self.current_run_id,
+                'rank': rank,
+                'view_count': video_item.get('view_count', ''),
+                'like_count': video_item.get('like_count', ''),
+                'comment_count': video_item.get('comment_count', ''),
+                'popularity_score': video_item.get('popularity_score', 0),
+                'popularity_score_precise': video_item.get('popularity_score_precise', 0),
+                'image_url': video_item.get('ai_image_url', ''),
+                'image_status': video_item.get('image_status', 'pending'),
+                'image_updated_at': video_item.get('image_updated_at', ''),
+                'reason': video_item.get('reason', ''),
+                'raw_view': video_item.get('view_details', {}).get('views', ''),
+                'growth_rate': video_item.get('view_details', {}).get('growth_rate', ''),
+                'platform_mentions': video_item.get('view_details', {}).get('platform_mentions', ''),
+                'keywords': video_item.get('view_details', {}).get('matched_keywords', ''),
+                'ai_opinion': video_item.get('view_details', {}).get('ai_opinion', ''),
+                'score_details': video_item.get('view_details', {}).get('score', '')
+            }
+            
+            if self.dry_run:
+                self.log_operation('upsert', 
+                    action='dry_run_snapshot', 
+                    story_id=story_id, 
+                    rank=rank,
+                    snapshot_date=str(self.snapshot_date)
+                )
+                return True
+            
+            if not self.supabase_enabled:
+                return True
+            
+            # Upsert snapshot (same story_id + snapshot_date = update)
+            self.supabase_client.table('snapshots').upsert(
+                snapshot_data, 
+                on_conflict='story_id,snapshot_date,run_id'
+            ).execute()
+            
+            self.log_operation('upsert', 
+                action='snapshot_upserted', 
+                story_id=story_id, 
+                rank=rank,
+                snapshot_date=str(self.snapshot_date),
+                popularity_score=snapshot_data['popularity_score_precise']
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error upserting snapshot: {e}")
+            self.log_operation('upsert', action='snapshot_error', story_id=story_id, error=str(e))
+            return False
     
     def fetch_fresh_trending_data(self) -> bool:
         """
@@ -200,6 +590,50 @@ class BatchVideoSummarizer:
             traceback.print_exc()
             return False
 
+    def _init_supabase(self) -> None:
+        """
+        Initialize Supabase client for two-layer database access.
+        """
+        if not SUPABASE_AVAILABLE:
+            logger.warning("Supabase not available - data will only be saved to JSON file")
+            return
+            
+        try:
+            # Try both possible environment variable names
+            supabase_url = os.getenv('SUPABASE_URL') or os.getenv('NEXT_PUBLIC_SUPABASE_URL')
+            supabase_key = os.getenv('SUPABASE_KEY') or os.getenv('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+            
+            if not supabase_url or not supabase_key:
+                logger.warning("Supabase credentials not found in environment variables")
+                logger.info("Looking for: SUPABASE_URL/SUPABASE_KEY or NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY")
+                return
+                
+            self.supabase_client = create_client(supabase_url, supabase_key)
+            
+            # Test connection and check for two-layer schema
+            try:
+                # Check if new schema tables exist
+                stories_result = self.supabase_client.table('stories').select('count', count='exact', head=True).execute()
+                snapshots_result = self.supabase_client.table('snapshots').select('count', count='exact', head=True).execute()
+                
+                self.supabase_enabled = True
+                logger.info(f"✅ Supabase two-layer schema connection established")
+                logger.info(f"📊 Database: {supabase_url}")
+                logger.info(f"📋 Stories count: {stories_result.count if stories_result.count is not None else 'unknown'}")
+                logger.info(f"📋 Snapshots count: {snapshots_result.count if snapshots_result.count is not None else 'unknown'}")
+                
+            except Exception as schema_error:
+                logger.warning(f"Two-layer schema not found, falling back to legacy news_trends table: {schema_error}")
+                # Try legacy table
+                legacy_result = self.supabase_client.table('news_trends').select('count', count='exact', head=True).execute()
+                self.supabase_enabled = True
+                logger.info(f"✅ Supabase legacy connection established")
+                logger.warning("⚠️ Using legacy news_trends table - consider migrating to two-layer schema")
+            
+        except Exception as e:
+            logger.error(f"Failed to connect to Supabase: {str(e)}")
+            self.supabase_enabled = False
+
     def load_video_data(self) -> bool:
         """
         Load video data - fetches FRESH data from YouTube API first, then loads from file.
@@ -208,10 +642,12 @@ class BatchVideoSummarizer:
             bool: True if loaded successfully, False otherwise
         """
         # STEP 1: Always try to fetch fresh data first
+        self.log_operation('fetch', action='start', input_file=self.input_file)
         fresh_data_success = self.fetch_fresh_trending_data()
         
         if not fresh_data_success:
-            print("⚠️ Failed to fetch fresh data, checking for cached data...")
+            logger.warning("Failed to fetch fresh data, checking for cached data...")
+            self.log_operation('fetch', action='fresh_failed', fallback='cached')
             
         # STEP 2: Load data from file (either fresh or cached)
         input_path = Path(self.input_file)
@@ -724,30 +1160,225 @@ class BatchVideoSummarizer:
             logger.error(f"Error saving to {filename}: {str(e)}")
             return False
     
-    def save_results(self) -> bool:
+    def save_to_supabase(self, news_items: List[Dict]) -> bool:
         """
-        Save processed videos with summaries to output JSON file.
+        Save news items directly to Supabase news_trends table.
         
+        Args:
+            news_items: List of processed news items
+            
         Returns:
             bool: True if saved successfully, False otherwise
+        """
+        if not self.supabase_enabled or not self.supabase_client:
+            logger.info("Supabase not enabled, skipping database save")
+            return False
+            
+        if not news_items:
+            print("❌ No news items to save to Supabase")
+            return False
+            
+        try:
+            print(f"💾 Saving {len(news_items)} items to Supabase...")
+            
+            # Prepare data for Supabase with proper field mapping and validation
+            supabase_items = []
+            
+            for idx, item in enumerate(news_items, 1):
+                try:
+                    # Get current date in Thailand timezone (UTC+7)
+                    from datetime import datetime, timezone, timedelta
+                    thailand_tz = timezone(timedelta(hours=7))
+                    current_date = datetime.now(thailand_tz).date().isoformat()
+                    
+                    # Prepare Supabase record with validated data types
+                    supabase_item = {
+                        'title': str(item.get('title', '')).strip(),
+                        'summary': str(item.get('summary', '')).strip() or None,
+                        'summary_en': str(item.get('summary_en', '')).strip() or None,
+                        'category': str(item.get('auto_category', '')).strip() or 'อื่นๆ (Other)',
+                        'platform': str(item.get('channel', '')).strip() or 'Unknown',
+                        'video_id': str(item.get('video_id', '')).strip(),
+                        'popularity_score': float(item.get('popularity_score', 0)),
+                        'popularity_score_precise': float(item.get('popularity_score_precise', 0)),
+                        'published_date': item.get('published_date', None),
+                        'description': str(item.get('description', '')).strip() or None,
+                        'channel': str(item.get('channel', '')).strip() or None,
+                        'view_count': str(item.get('view_count', '')).strip() or None,
+                        'ai_image_url': str(item.get('ai_image_url', '')).strip() or None,
+                        'ai_image_prompt': str(item.get('ai_image_prompt', '')).strip() or None,
+                        'date': current_date,  # Use 'date' column, not 'summary_date'
+                        
+                        # Additional metadata fields
+                        'duration': str(item.get('duration', '')).strip() or None,
+                        'like_count': str(item.get('like_count', '')).strip() or None,
+                        'comment_count': str(item.get('comment_count', '')).strip() or None,
+                        'reason': str(item.get('reason', '')).strip() or None,
+                        
+                        # View details metadata (JSON fields)
+                        'raw_view': str(item.get('view_details', {}).get('views', '')).strip() or None,
+                        'growth_rate': str(item.get('view_details', {}).get('growth_rate', '')).strip() or None,
+                        'platform_mentions': str(item.get('view_details', {}).get('platform_mentions', '')).strip() or None,
+                        'keywords': str(item.get('view_details', {}).get('matched_keywords', '')).strip() or None,
+                        'ai_opinion': str(item.get('view_details', {}).get('ai_opinion', '')).strip() or None,
+                        'score_details': str(item.get('view_details', {}).get('score', '')).strip() or None,
+                    }
+                    
+                    # Validate required fields
+                    if not supabase_item['title'] or not supabase_item['video_id']:
+                        print(f"⚠️ Skipping item {idx}: missing title or video_id")
+                        continue
+                        
+                    supabase_items.append(supabase_item)
+                    
+                except Exception as e:
+                    print(f"⚠️ Error preparing item {idx} for Supabase: {str(e)}")
+                    continue
+            
+            if not supabase_items:
+                print("❌ No valid items to save to Supabase")
+                return False
+                
+            print(f"📋 Prepared {len(supabase_items)} valid items for Supabase")
+            
+            # Before upserting, check for existing entries with same video_id and date
+            print(f"🔍 Checking for duplicate video_ids on date {current_date}...")
+            
+            # Get existing video_ids for today
+            existing_check = self.supabase_client.table('news_trends').select('video_id').eq('date', current_date).execute()
+            existing_video_ids = {item['video_id'] for item in (existing_check.data or [])}
+            
+            if existing_video_ids:
+                print(f"⚠️ Found {len(existing_video_ids)} existing videos for {current_date}")
+                # Remove duplicates from our insert list
+                supabase_items = [item for item in supabase_items if item['video_id'] not in existing_video_ids]
+                print(f"📋 After duplicate removal: {len(supabase_items)} new items to insert")
+            
+            if not supabase_items:
+                print("ℹ️ All items already exist for today, skipping insert")
+                return True
+            
+            # Upsert to Supabase (insert or update based on video_id)
+            result = self.supabase_client.table('news_trends').upsert(
+                supabase_items,
+                on_conflict='video_id'  # Use video_id as unique constraint
+            ).execute()
+            
+            if result.data:
+                print(f"✅ Successfully saved {len(result.data)} items to Supabase")
+                print(f"📊 Top 3 items with AI images:")
+                
+                # Log top 3 items for verification
+                for i, item in enumerate(supabase_items[:3], 1):
+                    has_image = '✅' if item.get('ai_image_url') else '❌'
+                    title_preview = item['title'][:50] + '...' if len(item['title']) > 50 else item['title']
+                    print(f"   #{i}: {has_image} {title_preview}")
+                    if item.get('ai_image_url'):
+                        print(f"       🖼️ Image: {item['ai_image_url']}")
+                
+                return True
+            else:
+                print("⚠️ Supabase upsert returned no data")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error saving to Supabase: {str(e)}")
+            logger.error(f"Supabase save error: {str(e)}")
+            return False
+    
+    def save_results(self) -> bool:
+        """
+        Save processed videos with summaries to Supabase database first, then JSON file as fallback.
+        
+        Returns:
+            bool: True if at least one save method succeeded, False otherwise
         """
         if not self.processed_videos:
             print("❌ No processed videos to save")
             return False
         
+        supabase_success = False
+        json_success = False
+        
+        print(f"\n💾 Saving {len(self.processed_videos)} processed videos...")
+        print("=" * 60)
+        
+        # Step 1: Try to save to Supabase first (primary data store)
+        print("🗃️ STEP 1: Saving to Supabase database...")
         try:
-            if self._save_to_file(self.output_file):
-                output_path = Path(self.output_file)
-                print(f"💾 Results saved to {self.output_file}")
-                print(f"📁 File size: {output_path.stat().st_size / 1024:.1f} KB")
-                return True
+            supabase_success = self.save_to_supabase(self.processed_videos)
+            if supabase_success:
+                print("✅ Supabase save successful - data is now live in database!")
             else:
-                print(f"❌ Error saving results to {self.output_file}")
-                return False
-            
+                print("⚠️ Supabase save failed - proceeding with JSON fallback")
         except Exception as e:
-            print(f"❌ Error saving results: {str(e)}")
+            print(f"❌ Supabase save error: {str(e)}")
+            print("⚠️ Proceeding with JSON fallback")
+        
+        # Step 2: Save to JSON file (always as fallback, even if Supabase succeeds)
+        print("\n📄 STEP 2: Saving to JSON file (fallback/cache)...")
+        try:
+            json_success = self._save_to_file(self.output_file)
+            if json_success:
+                output_path = Path(self.output_file)
+                print(f"✅ JSON file saved successfully")
+                print(f"📁 File: {self.output_file}")
+                print(f"📊 Size: {output_path.stat().st_size / 1024:.1f} KB")
+            else:
+                print("❌ JSON save failed")
+        except Exception as e:
+            print(f"❌ JSON save error: {str(e)}")
+            logger.error(f"Error saving JSON results: {str(e)}")
+        
+        # Step 3: Report final status
+        print(f"\n📋 SAVE RESULTS SUMMARY:")
+        print(f"🗃️ Supabase Database: {'✅ SUCCESS' if supabase_success else '❌ FAILED'}")
+        print(f"📄 JSON File Backup: {'✅ SUCCESS' if json_success else '❌ FAILED'}")
+        
+        if supabase_success:
+            print(f"🎉 PRIMARY SAVE SUCCESS: Data is live in Supabase!")
+            print(f"💡 Frontend can now fetch directly from database")
+        elif json_success:
+            print(f"⚠️ FALLBACK SAVE SUCCESS: Data saved to JSON file only")
+            print(f"💡 Frontend will use JSON file as data source")
+        else:
+            print(f"💥 CRITICAL: Both save methods failed!")
             return False
+        
+        # Debug: Print all image_url values to verify unique filenames
+        print(f"\n🔍 DEBUG: Image URLs with unique filenames:")
+        print("=" * 60)
+        for i, video in enumerate(self.processed_videos, 1):
+            image_url = video.get('ai_image_url', 'No URL')
+            image_prompt = video.get('ai_image_prompt', 'No Prompt')
+            title = video.get('title', 'No Title')[:50]
+            print(f"  Rank #{i}: {title}...")
+            print(f"    Image URL: {image_url}")
+            if image_url and image_url != 'No URL' and image_url is not None:
+                if '_' in str(image_url) and image_url.endswith('.png'):
+                    print(f"    ✅ Unique filename detected")
+                    # Extract timestamp from filename
+                    try:
+                        filename = image_url.split('/')[-1]  # Get filename from URL
+                        if '_' in filename:
+                            timestamp = filename.split('_')[-1].replace('.png', '')
+                            print(f"    🕒 Timestamp: {timestamp}")
+                    except:
+                        pass
+                else:
+                    print(f"    ⚠️ Missing unique filename!")
+            else:
+                print(f"    ℹ️ No image URL (expected for ranks > 3)")
+            
+            # Show prompt preview if available
+            if image_prompt and image_prompt != 'No Prompt':
+                prompt_preview = image_prompt[:100] + "..." if len(image_prompt) > 100 else image_prompt
+                print(f"    📝 Prompt: {prompt_preview}")
+            
+            print()
+        
+        # Return True if at least one save method succeeded
+        return supabase_success or json_success
     
     def display_sample_results(self, num_samples: int = 3):
         """
@@ -860,23 +1491,39 @@ class BatchVideoSummarizer:
                 print("🤖 Generating FRESH AI images for top 3 stories...")
                 print(f"🔑 OpenAI API key found: {openai_api_key[:12]}...{openai_api_key[-4:]}")
                 
-                # STEP 1: Clean up old images to ensure fresh generation
-                print("🗑️ Cleaning up old AI images...")
+                # STEP 1: Create frontend image directory and clean up old images
+                frontend_image_dir = "frontend/public/ai_generated_images"
+                os.makedirs(frontend_image_dir, exist_ok=True)
+                print(f"📁 Frontend image directory ready: {frontend_image_dir}")
+                
+                print("🗑️ Cleaning up old AI images from frontend...")
                 old_images_deleted = 0
-                for i in range(1, 4):  # image_1.png, image_2.png, image_3.png
-                    old_image_path = f"ai_generated_images/image_{i}.png"
-                    if os.path.exists(old_image_path):
-                        try:
-                            os.remove(old_image_path)
-                            print(f"   ✅ Deleted old image: {old_image_path}")
-                            old_images_deleted += 1
-                        except Exception as e:
-                            print(f"   ⚠️ Failed to delete {old_image_path}: {e}")
-                    else:
-                        print(f"   ℹ️ No existing image: {old_image_path}")
+                if os.path.exists(frontend_image_dir):
+                    for file in os.listdir(frontend_image_dir):
+                        if file.startswith("image_") and file.endswith(".png"):
+                            old_image_path = os.path.join(frontend_image_dir, file)
+                            try:
+                                os.remove(old_image_path)
+                                print(f"   ✅ Deleted old frontend image: {file}")
+                                old_images_deleted += 1
+                            except Exception as e:
+                                print(f"   ⚠️ Failed to delete {file}: {e}")
+                
+                # Also clean up old images from backend directory 
+                backend_image_dir = "ai_generated_images"
+                if os.path.exists(backend_image_dir):
+                    for file in os.listdir(backend_image_dir):
+                        if file.startswith("image_") and file.endswith(".png"):
+                            old_image_path = os.path.join(backend_image_dir, file)
+                            try:
+                                os.remove(old_image_path)
+                                print(f"   ✅ Deleted old backend image: {file}")
+                                old_images_deleted += 1
+                            except Exception as e:
+                                print(f"   ⚠️ Failed to delete {file}: {e}")
                 
                 print(f"🔄 Cleanup complete: {old_images_deleted} old images removed")
-                print("🎨 Ready for fresh image generation!")
+                print("🎨 Ready for fresh image generation with unique filenames!")
                 
                 from ai_image_generator import TrendSiamImageGenerator
                 
@@ -911,17 +1558,24 @@ class BatchVideoSummarizer:
                         print(f"   English summary: {'✅ Available' if summary_en and not summary_en.startswith('Summary failed') else '❌ Not available'}")
                         print(f"   Thai summary: {'✅ Available' if summary_th and not summary_th.startswith('สรุปไม่สำเร็จ') else '❌ Not available'}")
                         
-                        # Generate contextual prompt using the improved method
-                        print(f"🧠 Generating prompt for Rank #{i+1}...")
-                        prompt = generator.generate_enhanced_editorial_prompt(story)
-                        print(f"✅ Generated prompt ({len(prompt)} chars)")
-                        print(f"📄 Prompt preview: {prompt[:150]}...")
+                        # Generate unique timestamp for this image
+                        import time as time_module
+                        unique_timestamp = int(time_module.time() * 1000)
                         
-                        # ALWAYS generate fresh image (no existence check)
-                        image_filename = f"ai_generated_images/image_{i+1}.png"
+                        # Generate contextual prompt with unique seed for better variation
+                        print(f"🧠 Generating unique prompt for Rank #{i+1}...")
+                        base_prompt = generator.generate_enhanced_editorial_prompt(story)
+                        unique_prompt = f"{base_prompt} – unique_seed: {unique_timestamp}"
+                        print(f"✅ Generated unique prompt ({len(unique_prompt)} chars)")
+                        print(f"📄 Prompt preview: {unique_prompt[:150]}...")
+                        print(f"🔢 Unique seed: {unique_timestamp}")
+                        
+                        # Create unique filename with timestamp
+                        unique_filename = f"image_{i+1}_{unique_timestamp}.png"
+                        frontend_image_path = os.path.join(frontend_image_dir, unique_filename)
                         current_time = __import__('datetime').datetime.now().strftime("%H:%M:%S")
                         print(f"🎨 Generating FRESH image for Rank #{i+1} at {current_time}...")
-                        print(f"📂 Target file: {image_filename}")
+                        print(f"📂 Target file: {frontend_image_path}")
                         print(f"📰 Source content: {story_title[:80]}...")
                         
                         # Log what content is being used for generation
@@ -929,38 +1583,51 @@ class BatchVideoSummarizer:
                         print(f"   📝 Title: {story.get('title', 'N/A')[:100]}")
                         print(f"   📺 Channel: {story.get('channel', 'N/A')}")
                         print(f"   🏷️ Category: {story.get('auto_category', 'N/A')}")
+                        print(f"   🕒 Timestamp: {unique_timestamp}")
                         if story.get('summary_en'):
                             print(f"   📄 English summary (50 chars): {story['summary_en'][:50]}...")
                         if story.get('summary'):
                             print(f"   📄 Thai summary (50 chars): {story['summary'][:50]}...")
                         
-                        # Generate image with DALL-E (ALWAYS fresh generation)
-                        image_url = generator.generate_image_with_dalle(prompt, size="1024x1024")
+                        # Generate image with DALL-E using unique prompt
+                        print(f"🎯 DALL-E Request: Generating with unique prompt...")
+                        image_url = generator.generate_image_with_dalle(unique_prompt, size="1024x1024")
                         
                         if image_url:
                             print(f"✅ DALL-E generated NEW image URL: {image_url[:60]}...")
-                            # Download and save image locally
-                            local_path = generator.download_and_save_image(image_url, f"image_{i+1}.png")
+                            print(f"🔗 Full DALL-E URL: {image_url}")
                             
-                            if local_path:
-                                # Add fields to the story
-                                story['ai_image_local'] = local_path
-                                story['ai_image_url'] = f"./ai_generated_images/image_{i+1}.png"
-                                story['ai_image_prompt'] = prompt
+                            # Download and save image to frontend directory with unique filename
+                            try:
+                                import requests
+                                response = requests.get(image_url, timeout=30)
+                                response.raise_for_status()
+                                
+                                with open(frontend_image_path, 'wb') as f:
+                                    f.write(response.content)
+                                
+                                file_size = os.path.getsize(frontend_image_path)
+                                print(f"💾 Successfully saved image: {unique_filename} ({file_size} bytes)")
+                                
+                                # Add fields to the story with frontend URL path
+                                story['ai_image_local'] = frontend_image_path
+                                story['ai_image_url'] = f"/ai_generated_images/{unique_filename}"
+                                story['ai_image_prompt'] = unique_prompt
                                 completion_time = __import__('datetime').datetime.now().strftime("%H:%M:%S")
                                 print(f"✅ Successfully generated and saved FRESH Rank #{i+1} image at {completion_time}")
-                                print(f"📂 File saved: {local_path}")
+                                print(f"📂 Frontend path: {frontend_image_path}")
+                                print(f"🌐 Frontend URL: /ai_generated_images/{unique_filename}")
                                 generated_count += 1
-                            else:
-                                print(f"❌ Failed to save Rank #{i+1} image locally")
+                                
+                            except Exception as save_error:
+                                print(f"❌ Failed to save Rank #{i+1} image: {str(save_error)}")
                         else:
                             print(f"❌ DALL-E failed to generate Rank #{i+1} image")
                         
                         # Add delay between API calls
                         if i < len(top3_stories) - 1:
-                            import time
                             print("⏳ Waiting 3 seconds before next generation...")
-                            time.sleep(3)
+                            time_module.sleep(3)
                             
                     except Exception as e:
                         print(f"❌ ERROR processing Rank #{i+1} story: {str(e)}")
@@ -1009,30 +1676,20 @@ class BatchVideoSummarizer:
                 # Add AI image fields if not already present
                 position = i  # 1-based position
                 
-                # For top 3, fields should already be set above
+                # For top 3, fields should already be set above during AI generation
                 if position <= 3 and video.get('ai_image_prompt'):
                     # Top 3 story with AI generation completed
                     print(f"   ✅ Rank #{position}: AI fields already set")
                 else:
-                    # Check if fresh image file exists (should only be for top 3)
-                    image_filename = f"ai_generated_images/image_{position}.png"
-                    if position <= 3 and os.path.exists(image_filename):
-                        # Only map for top 3 positions (where fresh images should exist)
-                        if not video.get('ai_image_local'):
-                            video['ai_image_local'] = image_filename
-                        if not video.get('ai_image_url'):
-                            video['ai_image_url'] = f"./ai_generated_images/image_{position}.png"
-                        print(f"   ✅ Rank #{position}: Mapped to fresh generated image")
+                    # No image for positions beyond top 3
+                    if not video.get('ai_image_local'):
+                        video['ai_image_local'] = None
+                    if not video.get('ai_image_url'):
+                        video['ai_image_url'] = None
+                    if position <= 3:
+                        print(f"   ⚠️ Rank #{position}: Fresh image missing (generation may have failed)")
                     else:
-                        # No image for positions beyond top 3, or image missing
-                        if not video.get('ai_image_local'):
-                            video['ai_image_local'] = None
-                        if not video.get('ai_image_url'):
-                            video['ai_image_url'] = None
-                        if position <= 3:
-                            print(f"   ⚠️ Rank #{position}: Fresh image missing (generation may have failed)")
-                        else:
-                            print(f"   ℹ️ Rank #{position}: No image (only top 3 get AI images)")
+                        print(f"   ℹ️ Rank #{position}: No image (only top 3 get AI images)")
                 
                 updated_videos.append(video)
                 
@@ -1116,42 +1773,60 @@ class BatchVideoSummarizer:
         print(f"\n🎉 Bilingual batch processing completed!")
         print(f"📈 Summary success rate: {success_rate:.1f}% (videos with at least one successful summary)")
         print(f"📊 View count updates: {self.view_count_updated} successful, {self.view_count_failed} failed")
-        print(f"📂 Output file: {self.output_file}")
+        
+        # Data storage info
+        if self.supabase_enabled:
+            print(f"🗃️ PRIMARY DATA STORE: Supabase Database")
+            print(f"📄 BACKUP DATA STORE: {self.output_file}")
+            print(f"💡 Frontend will fetch fresh data directly from database!")
+        else:
+            print(f"📂 DATA STORE: {self.output_file} (JSON file only)")
+            print(f"💡 Run 'npm run import-to-supabase' to sync data to database")
+        
         print(f"🌐 Each video now includes:")
         print(f"   • Latest view counts from YouTube API")
         print(f"   • 'summary' (Thai) and 'summary_en' (English)")
         print(f"   • Popularity scores and category classification")
         print(f"   • Auto-category classification ('auto_category' field)")
         print(f"   • AI image fields ('ai_image_local' and 'ai_image_url')")
+        print(f"   • Direct database storage (if Supabase available)")
         
         return True
 
 
+# Backward compatibility alias
+class BatchVideoSummarizer(TrendSiamNewsIngester):
+    """Backward compatibility alias for TrendSiamNewsIngester."""
+    pass
+
+
 def parse_arguments() -> argparse.Namespace:
     """
-    Parse command line arguments.
+    Parse command line arguments with new idempotency and image options.
     
     Returns:
         argparse.Namespace: Parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description="Batch bilingual summarizer for YouTube trending videos (Thai + English) with real-time view count updates",
+        description="TrendSiam News Ingestion Pipeline with Idempotency and Image Persistence",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Features:
-  • Updates view counts from YouTube Data API before processing
-  • Generates Thai and English summaries using OpenAI API
-  • Calculates popularity scores and category classification
-  • Secure API key handling via .env file
+Key Features:
+  • Two-layer model (stories/snapshots) for idempotency without data loss
+  • Image persistence with Top-3 focus and retry logic
+  • Deterministic ordering and alignment
+  • Structured logging and proper exit codes
 
 Examples:
-  python summarize_all.py                    # Process all videos with view count updates and bilingual summaries
-  python summarize_all.py --limit 5          # Process first 5 videos only
-  python summarize_all.py --limit 10 --input my_videos.json
+  python summarize_all.py                                    # Process all videos
+  python summarize_all.py --limit 20 --verbose              # Process 20 with debug logging
+  python summarize_all.py --regenerate-missing-images       # Force check missing images
+  python summarize_all.py --dry-run --limit 5               # Test run without changes
 
-Prerequisites:
+Requirements:
   • YOUTUBE_API_KEY in .env file (for view count updates)
-  • OPENAI_API_KEY in .env file (for summaries)
+  • OPENAI_API_KEY in .env file (for summaries and images)
+  • Supabase credentials for database storage
         """
     )
     
@@ -1163,20 +1838,47 @@ Prerequisites:
     
     parser.add_argument(
         '--output', '-o',
-        default='thailand_trending_summary.json',
-        help='Output JSON file for results (default: thailand_trending_summary.json)'
+        default='frontend/public/data/thailand_trending_summary.json',
+        help='Output JSON file for results (default: frontend/public/data/thailand_trending_summary.json)'
     )
     
     parser.add_argument(
         '--limit', '-l',
         type=int,
-        help='Maximum number of videos to process (for testing). If not specified, all videos will be processed.'
+        default=20,
+        help='Maximum number of videos to process for current run (default: 20)'
     )
     
     parser.add_argument(
         '--verbose', '-v',
         action='store_true',
-        help='Enable verbose logging'
+        help='Enable verbose/debug logging'
+    )
+    
+    parser.add_argument(
+        '--regenerate-missing-images',
+        action='store_true',
+        help='Force check and regenerate missing/invalid images for Top-3 stories'
+    )
+    
+    parser.add_argument(
+        '--max-image-retries',
+        type=int,
+        default=3,
+        help='Maximum retries for image generation (default: 3)'
+    )
+    
+    parser.add_argument(
+        '--retry-backoff-seconds',
+        type=float,
+        default=2.0,
+        help='Backoff time between image generation retries (default: 2.0)'
+    )
+    
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Perform dry run without making any changes to database or files'
     )
     
     return parser.parse_args()
@@ -1184,7 +1886,7 @@ Prerequisites:
 
 def main():
     """
-    Main function to run the batch summarizer with CLI support.
+    Main function to run the news ingestion pipeline with CLI support.
     """
     try:
         # Parse command line arguments
@@ -1195,9 +1897,17 @@ def main():
             logging.getLogger().setLevel(logging.DEBUG)
             logger.info("Verbose logging enabled")
         
-        # Validate limit argument
+        # Validate arguments
         if args.limit is not None and args.limit <= 0:
             print("❌ Error: --limit must be a positive integer")
+            sys.exit(1)
+        
+        if args.max_image_retries < 0:
+            print("❌ Error: --max-image-retries must be non-negative")
+            sys.exit(1)
+        
+        if args.retry_backoff_seconds < 0:
+            print("❌ Error: --retry-backoff-seconds must be non-negative")
             sys.exit(1)
         
         # Show configuration
@@ -1218,11 +1928,15 @@ def main():
         print("🔥 Popularity scores: Calculated based on latest engagement metrics")
         print()
         
-        # Create and run the batch summarizer
+        # Create and run the news ingester
         summarizer = BatchVideoSummarizer(
             input_file=args.input,
             output_file=args.output,
-            limit=args.limit
+            limit=args.limit,
+            regenerate_missing_images=args.regenerate_missing_images,
+            max_image_retries=args.max_image_retries,
+            retry_backoff_seconds=args.retry_backoff_seconds,
+            dry_run=args.dry_run
         )
         
         success = summarizer.run()

@@ -1,0 +1,1022 @@
+{
+  "summary": {
+    "total_files": 524,
+    "used_files": 175,
+    "unused_files": 165,
+    "by_category": {
+      "documentation": {
+        "count": 1,
+        "size": 4520
+      },
+      "other": {
+        "count": 11,
+        "size": 22719
+      },
+      "source": {
+        "count": 108,
+        "size": 538541
+      },
+      "temporary_script": {
+        "count": 9,
+        "size": 28146
+      },
+      "test_debug": {
+        "count": 36,
+        "size": 246178
+      }
+    },
+    "total_size": 840104
+  },
+  "unused_files": [
+    {
+      "path": "docs\\score_details_implementation.md",
+      "size": 4520,
+      "category": "documentation",
+      "extension": ".md"
+    },
+    {
+      "path": "scripts\\sql\\verify_data_quality.sql",
+      "size": 3593,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "scripts\\sql\\create_weekly_snapshots_table.sql",
+      "size": 3301,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "scripts\\sql\\verify_keywords.sql",
+      "size": 3100,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "scripts\\sql_upsert_image_protection.sql",
+      "size": 2698,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "frontend\\scripts\\env-test-node.cjs",
+      "size": 2399,
+      "category": "other",
+      "extension": ".cjs"
+    },
+    {
+      "path": "tests\\verify_weekly_query.sql",
+      "size": 1551,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "tests\\verify_home_query.sql",
+      "size": 1467,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "scripts\\sql\\verify_score_details.sql",
+      "size": 1466,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "frontend\\scripts\\loadEnv.cjs",
+      "size": 1171,
+      "category": "other",
+      "extension": ".cjs"
+    },
+    {
+      "path": "scripts\\find_bnk48_story.sql",
+      "size": 1056,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "scripts\\quick_bnk48_check.sql",
+      "size": 917,
+      "category": "other",
+      "extension": ".sql"
+    },
+    {
+      "path": "frontend\\scripts\\importToSupabase.ts",
+      "size": 26971,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "scripts\\security_audit_comprehensive.py",
+      "size": 18829,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\app\\weekly-report\\WeeklyReportClient.tsx",
+      "size": 17016,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "scripts\\find_unused_files.py",
+      "size": 16700,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\app\\dev-dashboard\\page.tsx",
+      "size": 14453,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\app\\supabase-test\\page.tsx",
+      "size": 14169,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "core\\env_config.py",
+      "size": 13023,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\lib\\data\\homeData.ts",
+      "size": 12598,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly\\pdf2\\route.ts",
+      "size": 12259,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\testMixedScriptPDF_CLI.tsx",
+      "size": 12221,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\snapshots\\builderCore.ts",
+      "size": 11083,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\weeklyData.ts",
+      "size": 10513,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "core\\crypto_security.py",
+      "size": 10331,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\lib\\i18n.ts",
+      "size": 10159,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\data\\weeklyShared.ts",
+      "size": 10125,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "scripts\\verify_images.py",
+      "size": 9147,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\scripts\\testThaiRendering.tsx",
+      "size": 8594,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\scripts\\testEnhancedPDF.tsx",
+      "size": 8358,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\components\\news\\SupabaseNewsGrid.tsx",
+      "size": 8153,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\scripts\\testMixedScriptPDF_CLI.ts",
+      "size": 8041,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\pdfTypoV2.ts",
+      "size": 7931,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "security_audit.py",
+      "size": 7905,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "diagnose_supabase.py",
+      "size": 7259,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\components\\news\\TopStoryCard.tsx",
+      "size": 6794,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "scripts\\verify_image_setup.py",
+      "size": 6748,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\scripts\\testPdfSpacing.tsx",
+      "size": 6216,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\pdfTypo.ts",
+      "size": 5924,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\testPdfOverlapFix.ts",
+      "size": 5818,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\pdfStyles.ts",
+      "size": 5704,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\data\\weeklySnapshot.ts",
+      "size": 5662,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\middleware.ts",
+      "size": 5521,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "setup_environment.py",
+      "size": 5433,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly\\diagnostics\\route.ts",
+      "size": 5291,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\weeklyDataPublic.ts",
+      "size": 5116,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\_debug\\data-consistency\\route.ts",
+      "size": 5060,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\validation\\schemas.ts",
+      "size": 5018,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\auditStoryVsItem.ts",
+      "size": 4874,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\testSnapshotSystem.ts",
+      "size": 4804,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\textSanitizer.ts",
+      "size": 4716,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\health\\route.ts",
+      "size": 4692,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "scripts\\verify_image_urls.py",
+      "size": 4304,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\lib\\__tests__\\imageUtils.test.ts",
+      "size": 4119,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "validate_fixes.py",
+      "size": 4106,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\hooks\\useSupabaseNews.ts",
+      "size": 4067,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\debug-homepage-images.ts",
+      "size": 4067,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\supabasePublic.ts",
+      "size": 4066,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\security\\headers.ts",
+      "size": 4012,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\supabaseAdmin.ts",
+      "size": 3998,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\testEnhancedSpacing.tsx",
+      "size": 3974,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\WeeklyDoc.tsx",
+      "size": 3799,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\supabaseBrowser.ts",
+      "size": 3798,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\home\\diagnostics\\route.ts",
+      "size": 3681,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "validate_e2e_fixes.py",
+      "size": 3635,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "setup_backend_env.py",
+      "size": 3612,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\fontResolver.ts",
+      "size": 3573,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\supabaseClient.ts",
+      "size": 3564,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\utils\\normalize.ts",
+      "size": 3357,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\pdfFonts.ts",
+      "size": 3333,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\testPdfTextProcessing.tsx",
+      "size": 3319,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\envCheck.ts",
+      "size": 3309,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\types\\__tests__\\snapshotItem.test.ts",
+      "size": 3306,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly\\pdf\\route.tsx",
+      "size": 3257,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\logger.ts",
+      "size": 3227,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "scripts\\verify_score_details_pipeline.py",
+      "size": 3182,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\secure-example\\route.ts",
+      "size": 3136,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\weekly.ts",
+      "size": 2946,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\lib\\newsClient.ts",
+      "size": 2936,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\_debug\\consistency-check\\route.ts",
+      "size": 2851,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\testArrayUtils.ts",
+      "size": 2834,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\types\\snapshots.ts",
+      "size": 2743,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly\\build-snapshot\\route.ts",
+      "size": 2698,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\health\\db\\route.ts",
+      "size": 2603,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\_debug\\news\\route.ts",
+      "size": 2591,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\components\\ui\\PDFDownloadLink.tsx",
+      "size": 2584,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\analysisRenderer.ts",
+      "size": 2570,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\env-check\\route.ts",
+      "size": 2523,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\components\\ClientTime.tsx",
+      "size": 2394,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\weeklyDataShared.ts",
+      "size": 2365,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\revalidate\\route.ts",
+      "size": 2349,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\test-public-view.js",
+      "size": 2272,
+      "category": "source",
+      "extension": ".js"
+    },
+    {
+      "path": "mark_json_legacy.py",
+      "size": 2207,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\db-health\\route.ts",
+      "size": 2170,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\typesafety\\news.d.ts",
+      "size": 2142,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\testTupleTypes.ts",
+      "size": 2132,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\test-pdf\\route.tsx",
+      "size": 2094,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly\\data\\route.ts",
+      "size": 2018,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\types\\weekly.ts",
+      "size": 2005,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\scripts\\buildWeeklySnapshot.ts",
+      "size": 1935,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\pdf\\fonts.thai.ts",
+      "size": 1903,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\types\\news.ts",
+      "size": 1850,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly-report\\route.ts",
+      "size": 1686,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\home\\route.ts",
+      "size": 1680,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\types\\home.ts",
+      "size": 1488,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\system-meta\\route.ts",
+      "size": 1433,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly\\route.ts",
+      "size": 1425,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\utils\\array.ts",
+      "size": 1297,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\weekly\\check-update\\route.ts",
+      "size": 1287,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\utils\\dateFormatting.ts",
+      "size": 981,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\utils\\normalize.ts",
+      "size": 975,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\utils\\typeGuards.ts",
+      "size": 968,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\components\\pdf\\MinimalPDF.tsx",
+      "size": 939,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\env.ts",
+      "size": 899,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\app\\api\\_health\\db\\route.ts",
+      "size": 611,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\server\\getEnv.ts",
+      "size": 553,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\lib\\supabaseServer.ts",
+      "size": 510,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "frontend\\src\\components\\DynamicClientTime.tsx",
+      "size": 425,
+      "category": "source",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\lib\\data\\snapshotBuilder.ts",
+      "size": 352,
+      "category": "source",
+      "extension": ".ts"
+    },
+    {
+      "path": "utils\\__init__.py",
+      "size": 287,
+      "category": "source",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts\\fix_single_video_enrichment.py",
+      "size": 10836,
+      "category": "temporary_script",
+      "extension": ".py"
+    },
+    {
+      "path": "fix_ai_images_for_existing.py",
+      "size": 3973,
+      "category": "temporary_script",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts\\check_pipeline_health.py",
+      "size": 3913,
+      "category": "temporary_script",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts\\check_score_details.py",
+      "size": 2537,
+      "category": "temporary_script",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts\\check_aux_fields_pipeline.py",
+      "size": 2301,
+      "category": "temporary_script",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\sql\\check_top3_images.sql",
+      "size": 1706,
+      "category": "temporary_script",
+      "extension": ".sql"
+    },
+    {
+      "path": "tests\\sql\\check_aux_fields_today.sql",
+      "size": 1494,
+      "category": "temporary_script",
+      "extension": ".sql"
+    },
+    {
+      "path": "scripts\\sql\\check_score_details.sql",
+      "size": 1247,
+      "category": "temporary_script",
+      "extension": ".sql"
+    },
+    {
+      "path": "fix_env_DANGEROUS_DELETE_ME.py",
+      "size": 139,
+      "category": "temporary_script",
+      "extension": ".py"
+    },
+    {
+      "path": "test_idempotency_cases.py",
+      "size": 20929,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_pipeline_diagnostics.py",
+      "size": 15225,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_no_mock_output.py",
+      "size": 10759,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "acceptance_tests.py",
+      "size": 10635,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_image_url_protection.py",
+      "size": 10077,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_ai_only_images.py",
+      "size": 9628,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_categories_pipeline.py",
+      "size": 8977,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_keyword_extraction.py",
+      "size": 8869,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_crypto_security.py",
+      "size": 8660,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_images_pipeline_backend.py",
+      "size": 8133,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_compat_scores.py",
+      "size": 7374,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_summaries_presence.py",
+      "size": 7192,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_ai_image_generation.py",
+      "size": 6649,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "debug_second_story_image.py",
+      "size": 6621,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "scripts\\test_bnk48_fix.py",
+      "size": 6510,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\pipeline\\test_enrichment_persist.py",
+      "size": 6196,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_json_contract.py",
+      "size": 6087,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "test_image_prompt_presence.py",
+      "size": 5849,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_score_details_deterministic.py",
+      "size": 5675,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\ui\\test_detail_modal_render.tsx",
+      "size": 5655,
+      "category": "test_debug",
+      "extension": ".tsx"
+    },
+    {
+      "path": "frontend\\src\\__tests__\\test_weekly_data_transform.ts",
+      "size": 5576,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "tests\\test_multilingual_enrichment.py",
+      "size": 5539,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_bnk48_enrichment.py",
+      "size": 5259,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_home_fetcher.ts",
+      "size": 5070,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "tests\\test_home_top3_images.tsx",
+      "size": 4782,
+      "category": "test_debug",
+      "extension": ".tsx"
+    },
+    {
+      "path": "tests\\test_home_topstory_consistency.ts",
+      "size": 4541,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "tests\\test_no_client_joins_ai_images.ts",
+      "size": 4495,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "tests\\test_home_images.ts",
+      "size": 4449,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "test_image_fallback_fix.py",
+      "size": 4420,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "frontend\\src\\__tests__\\test_weekly_pdf_route.ts",
+      "size": 4266,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "tests\\api\\test_story_detail_payload.ts",
+      "size": 4235,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "tests\\test_score_details_display.tsx",
+      "size": 4007,
+      "category": "test_debug",
+      "extension": ".tsx"
+    },
+    {
+      "path": "tests\\test_images_public_access.ts",
+      "size": 3877,
+      "category": "test_debug",
+      "extension": ".ts"
+    },
+    {
+      "path": "tests\\test_build_score_details.py",
+      "size": 3759,
+      "category": "test_debug",
+      "extension": ".py"
+    },
+    {
+      "path": "tests\\test_common_images.tsx",
+      "size": 3225,
+      "category": "test_debug",
+      "extension": ".tsx"
+    },
+    {
+      "path": "tests\\test_no_ai_images_joins.ts",
+      "size": 2978,
+      "category": "test_debug",
+      "extension": ".ts"
+    }
+  ]
+}

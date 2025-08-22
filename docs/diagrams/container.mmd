@@ -1,0 +1,73 @@
+graph TB
+    %% Container Diagram - Thai Labels
+    
+    subgraph "เว็บเบราว์เซอร์"
+        WB["🌐 Web Browser<br/>React/Next.js App"]
+    end
+    
+    subgraph "TrendSiam Platform"
+        subgraph "Frontend Container"
+            FE["⚛️ Next.js Application<br/>• React Components<br/>• API Routes<br/>• PDF Generation<br/>• Static Assets"]
+        end
+        
+        subgraph "Backend Container"
+            BE["🐍 Python Services<br/>• Data Fetching<br/>• AI Processing<br/>• Image Generation<br/>• Scheduled Jobs"]
+        end
+    end
+    
+    subgraph "External APIs"
+        YT["📺 YouTube Data API<br/>ข้อมูลวิดีโอและสถิติ"]
+        OAI["🤖 OpenAI API<br/>GPT-4 และ DALL-E"]
+    end
+    
+    subgraph "Supabase Platform"
+        DB["🗄️ PostgreSQL Database<br/>• news_trends<br/>• weekly_snapshots<br/>• ai_images"]
+        AUTH["🔐 Supabase Auth<br/>JWT Authentication<br/>RLS Policies"]
+        STORE["📁 Supabase Storage<br/>AI Generated Images<br/>CDN Distribution"]
+        RT["⚡ Real-time<br/>Live Updates<br/>Subscriptions"]
+    end
+    
+    %% User interactions
+    WB --> |"HTTPS Requests<br/>JSON/PDF Responses"| FE
+    
+    %% Internal communications
+    FE --> |"Server Actions<br/>API Calls"| BE
+    BE --> |"Database Queries<br/>File Uploads"| DB
+    FE --> |"Direct Queries<br/>(Read-only)"| DB
+    
+    %% Authentication flow
+    FE --> |"User Sessions<br/>JWT Tokens"| AUTH
+    AUTH --> |"RLS Enforcement"| DB
+    
+    %% Storage operations
+    BE --> |"Image Upload<br/>Metadata"| STORE
+    FE --> |"Image Requests<br/>CDN URLs"| STORE
+    
+    %% Real-time updates
+    FE --> |"Subscriptions<br/>Live Data"| RT
+    RT --> |"Change Events"| DB
+    
+    %% External API calls
+    BE --> |"Video Data Requests<br/>API Key Auth"| YT
+    BE --> |"AI Processing<br/>Content Generation"| OAI
+    
+    %% Data returns
+    YT --> |"Video Metadata<br/>Statistics JSON"| BE
+    OAI --> |"Generated Content<br/>Images & Text"| BE
+    
+    DB --> |"Query Results<br/>JSON Data"| FE
+    STORE --> |"Image Files<br/>CDN URLs"| FE
+    RT --> |"Real-time Events<br/>WebSocket"| FE
+    
+    %% Styling
+    classDef frontendClass fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+    classDef backendClass fill:#E8F5E8,stroke:#388E3C,stroke-width:2px
+    classDef externalClass fill:#FFF3E0,stroke:#F57C00,stroke-width:2px
+    classDef supabaseClass fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px
+    classDef browserClass fill:#FFEBEE,stroke:#C62828,stroke-width:2px
+    
+    class WB browserClass
+    class FE frontendClass
+    class BE backendClass
+    class YT,OAI externalClass
+    class DB,AUTH,STORE,RT supabaseClass
