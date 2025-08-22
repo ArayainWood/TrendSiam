@@ -1,0 +1,26 @@
+# CODEOWNERS file for TrendSiam
+# These owners will be requested for review when someone opens a pull request
+
+# Security-sensitive files require security team review
+requirements*.txt @security-team @backend-team
+requirements*.in @security-team @backend-team
+.github/workflows/*security*.yml @security-team @devops-team
+
+# Cryptography and security modules
+core/crypto_security.py @security-team @backend-lead
+core/api_security.py @security-team @backend-lead
+core/secure_subprocess.py @security-team @backend-lead
+tests/test_crypto_security.py @security-team @backend-lead
+
+# Environment and configuration
+.env* @security-team @backend-lead
+**/config*.py @backend-team
+core/config.py @security-team @backend-lead
+
+# Python dependencies and security
+*.py @backend-team
+security_audit.py @security-team @backend-lead
+
+# Documentation
+SECURITY*.md @security-team
+docs/security/* @security-team

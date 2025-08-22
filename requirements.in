@@ -1,0 +1,80 @@
+# TrendSiam Project - Secure Dependencies
+# Source file for pip-compile to generate locked requirements.txt with hashes
+# Regenerate with: pip-compile --generate-hashes --resolver=backtracking requirements.in
+
+# ===== CORE DEPENDENCIES =====
+
+# YouTube data extraction (security-audited version)
+yt-dlp>=2024.1.1,<2025.0.0
+
+# OpenAI API for summarization (secure version)
+openai>=1.6.0,<2.0.0
+
+# Image processing for AI generation
+Pillow>=10.0.0,<11.0.0
+
+# Environment variables (secure handling)
+python-dotenv>=1.0.0,<2.0.0
+
+# HTTP requests with security features
+requests>=2.31.0,<3.0.0
+urllib3>=2.0.7,<3.0.0
+certifi>=2023.11.17
+
+# ===== PDF GENERATION =====
+
+# PyMuPDF for PDF creation with Thai language support  
+pymupdf>=1.22.5,<2.0.0
+
+# Timezone support for professional reporting
+pytz>=2023.3
+
+# ===== WEB FRAMEWORK =====
+
+# Streamlit web app (latest stable)
+streamlit>=1.29.0,<2.0.0
+
+# ===== UTILITIES =====
+
+# Progress bar for batch operations
+tqdm>=4.66.0,<5.0.0
+
+# Path handling (cross-platform)
+pathlib2>=2.3.7,<3.0.0
+
+# Type extensions for Python < 3.8 compatibility
+typing-extensions>=4.8.0,<5.0.0
+
+# Data validation and parsing
+pydantic>=2.5.0,<3.0.0
+
+# Supabase client for database operations
+supabase>=2.0.0,<3.0.0
+
+# ===== SECURITY DEPENDENCIES =====
+
+# Cryptography for secure operations - UPDATED TO LATEST SECURE VERSION
+cryptography>=42.0.0,<43.0.0
+
+# JSON Web Tokens (if needed for auth)
+PyJWT>=2.8.0,<3.0.0
+
+# Input sanitization
+bleach>=6.1.0,<7.0.0
+
+# ===== DEVELOPMENT & SECURITY AUDITING =====
+
+# Security scanning tools
+pip-audit>=2.6.0,<3.0.0
+safety>=3.0.0,<4.0.0
+bandit>=1.7.5,<2.0.0
+
+# Dependency management
+pip-tools>=7.3.0,<8.0.0
+
+# ===== VERSION CONSTRAINTS =====
+
+# Pin critical transitive dependencies to avoid supply chain attacks
+idna>=3.6,<4.0
+charset-normalizer>=3.3.0,<4.0
+setuptools>=68.0.0

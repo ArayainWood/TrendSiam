@@ -1,0 +1,7 @@
+<svg width="320" height="180" viewBox="0 0 320 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="180" fill="#f3f4f6"/>
+  <rect x="1" y="1" width="318" height="178" stroke="#e5e7eb" stroke-width="2" fill="none"/>
+  <circle cx="160" cy="75" r="20" fill="#d1d5db"/>
+  <path d="M140 95h40l-10-15-10 10-10-10-10 15z" fill="#d1d5db"/>
+  <text x="160" y="125" text-anchor="middle" fill="#6b7280" font-family="sans-serif" font-size="14">Loading Image...</text>
+</svg>

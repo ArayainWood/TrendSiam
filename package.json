@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@fontsource/noto-sans-thai": "^5.2.6",
+    "@react-pdf/renderer": "^4.3.0",
+    "dayjs": "^1.11.13",
+    "dotenv": "^17.2.1"
+  }
+}

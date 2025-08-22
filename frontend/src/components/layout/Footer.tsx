@@ -29,9 +29,9 @@ export function Footer() {
 
   const stats = {
     totalStories: news.length,
-    aiImages: news.filter(item => item.ai_image_url).length,
-    avgScore: news.length > 0 ? Math.round(news.reduce((sum, item) => sum + (item.popularity_score_precise || item.popularity_score), 0) / news.length) : 0,
-    topCategories: [...new Set(news.map(item => item.auto_category))].filter(Boolean).length
+    aiImages: news.filter(item => item.isAIImage).length,
+    avgScore: news.length > 0 ? Math.round(news.reduce((sum: number, item) => sum + (item.popularity_score_precise || item.popularityScore || 0), 0) / news.length) : 0,
+    topCategories: [...new Set(news.map(item => item.category))].filter(Boolean).length
   }
 
   return (

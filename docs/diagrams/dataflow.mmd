@@ -1,0 +1,69 @@
+graph TD
+    %% Data Flow Diagram - Thai Labels
+    
+    subgraph "ข้อมูลดิบ"
+        YT["📺 YouTube API<br/>Raw Video Data"]
+    end
+    
+    subgraph "การประมวลผล"
+        FETCH["🔄 Data Fetcher<br/>summarize_all_v2.py"]
+        AI["🤖 AI Processor<br/>OpenAI Integration"]
+        IMG["🎨 Image Generator<br/>DALL-E Integration"]
+        SCORE["📊 Popularity Scorer<br/>Algorithm Processing"]
+    end
+    
+    subgraph "ฐานข้อมูล Supabase"
+        NT["📰 news_trends<br/>ข้อมูลข่าวหลัก"]
+        WS["📋 weekly_snapshots<br/>รายงานรายสัปดาห์"]
+        AIG["🖼️ ai_images<br/>ภาพที่สร้างด้วย AI"]
+        STOR["💾 Storage Bucket<br/>ไฟล์ภาพ"]
+    end
+    
+    subgraph "การแสดงผล"
+        HOME["🏠 Homepage<br/>ข่าวล่าสุด"]
+        WEEKLY["📊 Weekly Report<br/>รายงานสรุป"]
+        PDF["📄 PDF Export<br/>รายงาน PDF"]
+    end
+    
+    %% Data flow sequence
+    YT --> |"1. ดึงข้อมูลวิดีโอ<br/>metadata, stats"| FETCH
+    FETCH --> |"2. ส่งข้อมูลดิบ<br/>เพื่อประมวลผล"| AI
+    AI --> |"3. สร้างสรุป<br/>จัดหมวดหมู่"| SCORE
+    AI --> |"4. สร้าง prompt<br/>สำหรับภาพ"| IMG
+    
+    %% Database storage
+    SCORE --> |"5. บันทึกข้อมูล<br/>ที่ประมวลแล้ว"| NT
+    IMG --> |"6. อัปโหลดภาพ<br/>และ metadata"| AIG
+    IMG --> |"7. เก็บไฟล์ภาพ<br/>ใน storage"| STOR
+    
+    %% Weekly processing
+    NT --> |"8. สร้าง snapshot<br/>รายสัปดาห์"| WS
+    AIG --> |"9. รวมข้อมูลภาพ<br/>ในรายงาน"| WS
+    
+    %% Frontend display
+    NT --> |"10. แสดงข่าว<br/>หน้าแรก"| HOME
+    WS --> |"11. แสดงรายงาน<br/>รายสัปดาห์"| WEEKLY
+    WS --> |"12. สร้าง PDF<br/>รายงาน"| PDF
+    STOR --> |"13. โหลดภาพ<br/>ผ่าน CDN"| HOME
+    STOR --> |"14. รวมภาพ<br/>ใน PDF"| PDF
+    
+    %% Data validation and quality
+    subgraph "การตรวจสอบคุณภาพ"
+        VAL["✅ Data Validation<br/>• Schema Validation<br/>• Content Quality<br/>• Duplicate Detection"]
+    end
+    
+    FETCH --> |"ตรวจสอบข้อมูล"| VAL
+    VAL --> |"ข้อมูลที่ผ่านการตรวจสอบ"| AI
+    
+    %% Styling
+    classDef sourceClass fill:#FFEBEE,stroke:#C62828,stroke-width:2px
+    classDef processClass fill:#E8F5E8,stroke:#388E3C,stroke-width:2px
+    classDef dbClass fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px
+    classDef displayClass fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+    classDef validationClass fill:#FFF3E0,stroke:#F57C00,stroke-width:2px
+    
+    class YT sourceClass
+    class FETCH,AI,IMG,SCORE processClass
+    class NT,WS,AIG,STOR dbClass
+    class HOME,WEEKLY,PDF displayClass
+    class VAL validationClass
