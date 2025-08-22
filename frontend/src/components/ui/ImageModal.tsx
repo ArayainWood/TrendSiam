@@ -92,7 +92,9 @@ export function ImageModal({ src, alt, isOpen, onClose }: ImageModalProps) {
     if (scale > 1 && e.touches.length === 1) {
       setIsDragging(true)
       const touch = e.touches[0]
-      setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y })
+      if (touch) {
+        setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y })
+      }
     }
   }
 
@@ -100,10 +102,12 @@ export function ImageModal({ src, alt, isOpen, onClose }: ImageModalProps) {
     if (isDragging && scale > 1 && e.touches.length === 1) {
       e.preventDefault()
       const touch = e.touches[0]
-      setPosition({
-        x: touch.clientX - dragStart.x,
-        y: touch.clientY - dragStart.y
-      })
+      if (touch) {
+        setPosition({
+          x: touch.clientX - dragStart.x,
+          y: touch.clientY - dragStart.y
+        })
+      }
     }
   }
 

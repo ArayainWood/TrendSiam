@@ -51,6 +51,7 @@ class AppConfig:
     data_file: str = "thailand_trending_summary.json"
     backup_file: str = "thailand_trending_api.json"
     images_dir: str = "ai_generated_images"
+    supabase_bucket_name: str = "ai-images"
     log_level: str = "INFO"
     debug_mode: bool = False
     max_news_items: int = 50
@@ -116,6 +117,7 @@ class ConfigManager:
                 data_file=os.getenv('NEWS_DATA_FILE', 'thailand_trending_summary.json'),
                 backup_file=os.getenv('BACKUP_DATA_FILE', 'thailand_trending_api.json'),
                 images_dir=os.getenv('IMAGES_DIR', 'ai_generated_images'),
+                supabase_bucket_name=os.getenv('SUPABASE_AI_IMAGES_BUCKET', 'ai-images'),
                 log_level=os.getenv('LOG_LEVEL', 'INFO'),
                 debug_mode=os.getenv('DEBUG_MODE', 'false').lower() == 'true',
                 max_news_items=int(os.getenv('MAX_NEWS_ITEMS', '50'))

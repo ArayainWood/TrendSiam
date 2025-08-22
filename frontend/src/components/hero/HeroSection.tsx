@@ -5,6 +5,7 @@ import { Sparkles, TrendingUp } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import { useNewsStore } from '../../stores/newsStore'
 import { getText } from '../../lib/i18n'
+import { calculateAIImagesCount } from '../../lib/constants/businessRules'
 
 export function HeroSection() {
   const { language } = useUIStore()
@@ -109,10 +110,10 @@ export function HeroSection() {
               <div className="w-px h-8 bg-concrete-300 dark:bg-void-600"></div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-thai-600 dark:text-thai-400">
-                  {news.filter(item => item.ai_image_url).length}
+                  {calculateAIImagesCount(news)}
                 </div>
                 <div className="text-xs text-concrete-600 dark:text-concrete-400">
-                  AI Images
+                  AI Images (Top 3)
                 </div>
               </div>
               <div className="w-px h-8 bg-concrete-300 dark:bg-void-600"></div>
