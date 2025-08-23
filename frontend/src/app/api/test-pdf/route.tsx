@@ -55,17 +55,20 @@ export async function GET() {
     });
 
     const elapsed = Date.now() - startTime;
-    // ✅ ใช้ Response มาตรฐาน (รับ Uint8Array ได้ชัวร์)
-    return new Response(bytes, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="test.pdf"',
-        'Content-Length': String(bytes.byteLength),
-        'X-Generation-Time': String(elapsed),
-        'Cache-Control': 'no-store',
-      },
-    });
+   // ✅ ใช้ Blob ครอบ bytes
+const blob = new Blob([bytes], { type: 'application/pdf' });
+
+return new Response(blob, {
+  status: 200,
+  headers: {
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': 'attachment; filename="test.pdf"',
+    'Content-Length': String(bytes.byteLength),
+    'X-Generation-Time': String(elapsed),
+    'Cache-Control': 'no-store',
+  },
+});
+
 
   } catch (error: any) {
     return new Response(JSON.stringify({ error: 'Test PDF failed', details: error?.message ?? String(error) }), {
