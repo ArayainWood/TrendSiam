@@ -48,9 +48,34 @@ export async function GET(request: Request): Promise<Response> {
     const instance = pdf(<WeeklyDoc {...data} />);
     const pdfResult = await instance.toBuffer();
     
-    const buf = pdfResult as unknown as Buffer;
+    let pdfUint8Array;
+    
+    // ตรวจสอบว่าเป็น ReadableStream หรือไม่
+    if (pdfResult instanceof ReadableStream) {
+      const reader = pdfResult.getReader();
+      const chunks = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+      pdfUint8Array = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        pdfUint8Array.set(new Uint8Array(chunk), offset);
+        offset += chunk.length;
+      }
+    } else {
+      // แปลง Buffer ที่ได้ให้เป็น Uint8Array
+      pdfUint8Array = new Uint8Array(pdfResult as unknown as Buffer);
+    }
+    
+    const blob = new Blob([pdfUint8Array], { type: 'application/pdf' });
+    
 
-    return new Response(buf, {
+
+    return new Response(blob, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
