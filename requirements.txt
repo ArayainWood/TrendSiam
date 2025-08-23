@@ -234,7 +234,7 @@ colorama==0.4.6 \
     #   build
     #   click
     #   tqdm
-cryptography==42.0.8 \
+cryptography==44.0.1 \
     --hash=sha256:013629ae70b40af70c9a7a5db40abe5d9054e6f4380e50ce769947b73bf3caad \
     --hash=sha256:2346b911eb349ab547076f47f2e035fc8ff2c02380a7cbbf8d87114fa0f1c583 \
     --hash=sha256:2f66d9cd9147ee495a8374a45ca445819f8929a3efcd2e3df6428e46c3cbb10b \
