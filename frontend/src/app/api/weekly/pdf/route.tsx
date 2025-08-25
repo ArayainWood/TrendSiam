@@ -48,34 +48,17 @@ export async function GET(request: Request): Promise<Response> {
     const instance = pdf(<WeeklyDoc {...data} />);
     const pdfResult = await instance.toBuffer();
     
-    let pdfUint8Array;
-    
-    // ตรวจสอบว่าเป็น ReadableStream หรือไม่
-    if (pdfResult instanceof ReadableStream) {
-      const reader = pdfResult.getReader();
-      const chunks = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-      }
-      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-      pdfUint8Array = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const chunk of chunks) {
-        pdfUint8Array.set(new Uint8Array(chunk), offset);
-        offset += chunk.length;
-      }
-    } else {
-      // แปลง Buffer ที่ได้ให้เป็น Uint8Array
-      pdfUint8Array = new Uint8Array(pdfResult as unknown as Buffer);
-    }
-    
-    const blob = new Blob([pdfUint8Array], { type: 'application/pdf' });
-    
+    const buf = pdfResult as unknown as Buffer;
+    const uint8Array = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(uint8Array);
+        controller.close();
+      }
+    });
 
-    return new Response(blob, {
+    return new Response(stream, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
@@ -85,10 +68,10 @@ export async function GET(request: Request): Promise<Response> {
         'X-TS-Processing-Time': String(Date.now()-t0),
       },
     });
-  } catch (e:any) {
+  } catch (e: unknown) {
     return new Response(JSON.stringify({
       error: 'PDF generation failed',
-      details: e?.message ?? 'unknown',
+      details: (e as Error)?.message ?? 'unknown',
       timeElapsed: String(Date.now()-t0),
       timestamp: new Date().toISOString(),
     }), { status: 500, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-TS-API': 'weekly-pdf-v2' }});
