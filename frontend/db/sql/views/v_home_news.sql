@@ -44,6 +44,7 @@ SELECT
   
   -- Growth metrics
   nt.growth_rate,
+  
   nt.ai_opinion,
   nt.score_details,
   
