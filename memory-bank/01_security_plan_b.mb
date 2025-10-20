@@ -1,0 +1,24 @@
+• Security Model (Plan-B) — canonical:
+  • All frontend reads must use Supabase anon key only, and only from whitelisted public views (public_v_*). Read-only.
+  • Backend jobs (e.g., summarize_all_v2.py) may use service_role key; never expose service_role client-side.
+  • Views hide sensitive fields (keys/internal logs/score breakdowns). Public JSON outputs are safe.
+  • Separation of roles: anon (read public views), service_role (write/update via backend jobs).
+  • Column filtering: expose only safe columns (id, title, summary, category, popularity_score, ai_image_url, source platform, source URL, etc.).
+• Never ship secrets in client, never hardcode keys, never commit secrets. Do not push automatically to GitHub.
+• Public views are the single source of truth for the frontend. If schema changes, add aliases in views to avoid breaking UI.
+• System Meta Access (Updated 2025-09-26):
+  • public_v_system_meta view uses definer semantics (security_invoker=false) to safely expose config keys
+  • public_v_home_news MUST be independent of all meta tables (no joins/subqueries to avoid zero rows)
+  • public_v_home_news properly joins news_trends (primary), stories, snapshots for complete data
+  • Analysis fields (ai_opinion, score_details) come from news_trends table
+  • English summaries come from stories.summary_en or news_trends.summary_en
+  • Latest metrics from snapshots, fallback to news_trends
+  • Fallback RPC functions available: get_public_system_meta() and get_public_home_news()
+  • Frontend APIs must handle permission errors gracefully with default values
+  • Permission self-check available at /api/permissions/selfcheck
+  • Regression guard script at scripts/forbid_base_table_reads.sh (npm run lint:perms)
+
+## Further Reading
+- docs/DB_AUTOMATION_PLAYBOOK.md (database automation standard with Plan-B security patterns)
+- memory-bank/00_db_automation_standard.mb (DB automation summary)
+- memory-bank/03_frontend_homepage_freshness.mb (API implementation examples)

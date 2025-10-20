@@ -1,178 +1,102 @@
-/**
- * Home Diagnostics API
- * 
- * Returns diagnostic information about data normalization and field availability
- */
+// Simple diagnostics for Home API - uses only public views
+import { NextResponse, NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { HOME_VIEW, HOME_COLUMNS } from '@/lib/db/schema-constants'
 
-import { fetchHomeData } from '@/lib/data/homeDataSecure';
-import { normalizeNewsItems } from '@/lib/normalizeNewsItem';
-import { calculateAIImagesCount, getGrowthRateLabel } from '@/lib/constants/businessRules';
-import { formatGrowthRate } from '@/lib/helpers/growthHelpers';
-import { collectDisplayKeywords } from '@/lib/helpers/keywords';
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+function getClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anon) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  }
+  return createClient(url, anon, {
+    auth: { persistSession: false },
+  })
+}
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const data = await fetchHomeData(50, true); // Get more items for better diagnostics
-    
-    if (!data.success) {
-      return new Response(JSON.stringify({
-        success: false,
-        fetchedCount: 0,
-        afterNormalizeCount: 0,
-        error: data.error || 'Failed to fetch data'
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    const supabase = getClient()
+
+    // Sample row to infer available columns
+    const sample = await supabase
+      .from(HOME_VIEW)
+      .select(HOME_COLUMNS.join(','))
+      .limit(1)
+
+    const sampleRow = sample.data?.[0] ?? {}
+    const columnsFromView = Object.keys(sampleRow)
+    const missingColumns = HOME_COLUMNS.filter(c => !columnsFromView.includes(c))
+    const unexpectedColumns = columnsFromView.filter(c => !HOME_COLUMNS.includes(c as any))
+
+    // Meta keys via public view (including freshness policy)
+    const metaRes = await supabase
+      .from('public_v_system_meta')
+      .select('key, value, updated_at')
+      .in('key', ['home_limit', 'top3_max', 'news_last_updated', 'home_freshness_policy', 'home_columns_hash'])
+
+    const meta: Record<string, unknown> = {}
+    if (metaRes.data && Array.isArray(metaRes.data)) {
+      for (const row of metaRes.data) {
+        meta[row.key] = row.value
+      }
     }
 
-    const rawItems = data.items || [];
-    const normalizedItems = normalizeNewsItems(rawItems);
+    // Fetch some data to analyze
+    const { data, error } = await supabase
+      .from(HOME_VIEW)
+      .select(HOME_COLUMNS.join(','))
+      .order('rank', { ascending: true })
+      .limit(10)
 
-    // Get top 3 for special analysis
-    const top3 = normalizedItems.slice(0, 3);
+    if (error) {
+      return NextResponse.json({
+        success: false,
+        fetchedCount: 0,
+        error: error.message,
+        missingColumns,
+        unexpectedColumns
+      }, { status: 200 })
+    }
 
-    // Count various data quality metrics
-    const columnHealth = {
-      // Core fields (should be 100%)
-      hasTitle: normalizedItems.filter(item => item.title).length,
-      hasSummary: normalizedItems.filter(item => item.summary).length,
-      hasSummaryEn: normalizedItems.filter(item => item.summary_en).length,
-      hasSummaryEnPercentage: normalizedItems.length > 0 
-        ? ((normalizedItems.filter(item => item.summary_en).length / normalizedItems.length) * 100).toFixed(1) + '%'
-        : '0%',
-      hasCategory: normalizedItems.filter(item => item.category).length,
-      
-      // Images
-      hasRealImage: normalizedItems.filter(item => item.displayImageUrl && item.displayImageUrl !== '/placeholder-image.svg').length,
-      hasAIImage: normalizedItems.filter(item => item.isAIImage).length,
-      hasAIImagePrompt: normalizedItems.filter(item => item.aiImagePrompt).length,
-      hasPlaceholder: normalizedItems.filter(item => !item.displayImageUrl || item.displayImageUrl === '/placeholder-image.svg').length,
-      
-      // Metrics
-      hasViews: normalizedItems.filter(item => item.views && item.views > 0).length,
-      hasLikes: normalizedItems.filter(item => item.likes && item.likes > 0).length,
-      hasComments: normalizedItems.filter(item => item.comments && item.comments > 0).length,
-      hasGrowthRate: normalizedItems.filter(item => item.growthRate !== null && item.growthRate !== undefined).length,
-      
-      // Analysis fields
-      hasKeywords: normalizedItems.filter(item => item.keywords && item.keywords.length > 0).length,
-      hasReason: normalizedItems.filter(item => item.reason && item.reason !== 'N/A').length,
-      hasAiOpinion: normalizedItems.filter(item => item.aiOpinion && item.aiOpinion !== 'N/A').length,
-      hasScoreDetails: normalizedItems.filter(item => item.scoreDetails).length,
-      
-      // UI fields
-      hasPopularitySubtext: normalizedItems.filter(item => item.popularitySubtext).length,
-      hasRank: normalizedItems.filter(item => item.rank && item.rank > 0).length
-    };
+    const items = data || []
+    
+    // Sample titles
+    const sampleTitles = items.slice(0, 3).map((item: any) => 
+      item.title ? String(item.title).substring(0, 50) + '...' : '(no title)'
+    )
 
-    // AI Images analysis (Top 3 rule)
-    const aiImagesCount = calculateAIImagesCount(normalizedItems);
-    const top3WithAI = top3.filter(item => item.isAIImage).length;
-    const totalWithAI = normalizedItems.filter(item => item.isAIImage).length;
-
-    // Sample items for inspection
-    const sample = normalizedItems.slice(0, 5).map(item => {
-      const growthData = formatGrowthRate(item.growthRate);
-      const keywordsData = collectDisplayKeywords(item);
-      
-      return {
-        id: item.id,
-        rank: item.rank,
-        title: item.title.substring(0, 50) + '...',
-        popularityScore: item.popularityScore || 0,
-        popularitySubtext: item.popularitySubtext || 'No subtext',
-        popularitySubtextPreview: item.popularitySubtext ? item.popularitySubtext.substring(0, 50) + '...' : null,
-        growthRate: item.growthRate,
-        growthRaw: item.growthRate,
-        growthText: growthData.text,
-        growthTier: growthData.tier,
-        growthDebug: growthData.debug,
-        growthRateLabel: getGrowthRateLabel(item.growthRate),
-        hasImage: item.displayImageUrl && item.displayImageUrl !== '/placeholder-image.svg',
-        isAIImage: item.isAIImage,
-        hasAIImagePrompt: !!item.aiImagePrompt?.trim(),
-        aiImagePromptLength: item.aiImagePrompt?.trim() ? item.aiImagePrompt.trim().length : 0,
-        aiImagePromptSource: item.aiImagePrompt?.trim() ? 'aiImagePrompt field (fallback chain)' : 'none',
-        aiImagePromptPreview: item.aiImagePrompt?.trim() ? item.aiImagePrompt.trim().substring(0, 80) + '...' : null,
-        summaryEn: item.summary_en ? item.summary_en.substring(0, 50) + '...' : null,
-        keywords: item.keywords,
-        keywordsCount: item.keywords.length,
-        keywordsSource: keywordsData.source,
-        keywordsFinal: keywordsData.keywords,
-        keywordsFinalCount: keywordsData.keywords.length,
-        platforms: item.platforms,
-        platformsCount: item.platforms.length,
-        platformsSource: item.platforms.length > 0 ? 'platforms field (fallback chain)' : 'none',
-        platformsFinal: item.platforms,
-        platformsFinalCount: item.platforms.length
-      };
-    });
-
-    return new Response(JSON.stringify({
+    return NextResponse.json({
       success: true,
-      fetchedCount: rawItems.length,
-      afterNormalizeCount: normalizedItems.length,
-      aiImagesCountComputed: aiImagesCount,
-      topNUsed: 3,
-      aiImagesAnalysis: {
-        calculatedTop3Count: aiImagesCount,
-        actualTop3WithAI: top3WithAI,
-        totalWithAI,
-        top3Details: top3.map(item => ({
-          rank: item.rank,
-          hasAIImage: item.isAIImage,
-          title: item.title.substring(0, 30) + '...'
-        }))
-      },
-      aiPromptAnalysis: {
-        totalItemsWithPrompts: normalizedItems.filter(item => !!item.aiImagePrompt?.trim()).length,
-        totalItems: normalizedItems.length,
-        promptCoverage: `${((normalizedItems.filter(item => !!item.aiImagePrompt?.trim()).length / normalizedItems.length) * 100).toFixed(1)}%`,
-        top3WithPrompts: top3.filter(item => !!item.aiImagePrompt?.trim()).length,
-        promptSources: [
-          'Primary: stories.ai_image_prompt',
-          'Fallback 1: news_trends.ai_image_prompt', 
-          'Fallback 2: image_files.reason (latest valid)',
-          'Fallback 3: snapshots.reason (latest)'
-        ],
-        fallbackChainImplemented: true,
-        viewUsed: 'v_home_news with COALESCE fallback chain'
-      },
-      growthComputationStatus: {
-        source: 'Python script (views/day calculation)',
-        hasGrowthData: columnHealth.hasGrowthRate,
-        sampleGrowthRates: normalizedItems.slice(0, 3).map(item => ({
-          title: item.title.substring(0, 30) + '...',
-          growthRate: item.growthRate,
-          label: getGrowthRateLabel(item.growthRate)
-        }))
-      },
-      columnHealth,
-      sample,
-      diagnostics: data.diagnostics
-    }, null, 2), {
+      fetchedCount: items.length,
+      columnsFromView,
+      missingColumns,
+      unexpectedColumns,
+      meta,
+      sampleTitles,
+      top3Count: items.filter((item: any) => item.is_top3).length,
+      withImages: items.filter((item: any) => item.image_url).length,
+      withPrompts: items.filter((item: any) => item.ai_prompt).length
+    }, {
       status: 200,
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store'
       }
-    });
+    })
 
   } catch (error) {
-    console.error('[Home Diagnostics API] Error:', error);
-    return new Response(JSON.stringify({
+    console.error('[Home Diagnostics] Error:', error)
+    return NextResponse.json({
       success: false,
       fetchedCount: 0,
-      afterNormalizeCount: 0,
       error: error instanceof Error ? error.message : 'Unknown error'
-    }), {
+    }, {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
-    });
+    })
   }
 }

@@ -118,7 +118,7 @@ export default function EnhancedHomePage() {
                     </div>
                     <div>
                       <div className="text-3xl font-heading font-bold text-concrete-900 dark:text-white">
-                        {news.filter(item => item.keywords.length > 0).length}
+                        {news.filter(item => item.keywordsList && item.keywordsList.length > 0).length}
                       </div>
                       <div className="text-sm text-concrete-500 dark:text-concrete-500 uppercase tracking-wide">
                         With Keywords
@@ -232,13 +232,13 @@ export default function EnhancedHomePage() {
                       🎨 AI Images: {news.filter(item => item.isAIImage).length}/{news.length}
                     </div>
                     <div className="text-gray-600 dark:text-gray-400 mt-1">
-                      🏷️ Keywords: {news.filter(item => item.keywords.length > 0).length}/{news.length} items have keywords
+                      🏷️ Keywords: {news.filter(item => item.keywordsList && item.keywordsList.length > 0).length}/{news.length} items have keywords
                     </div>
                     <div className="text-gray-600 dark:text-gray-400 mt-1">
                       💭 AI Opinions: {news.filter(item => item.aiOpinion).length}/{news.length} items have AI opinions
                     </div>
                     <div className="text-gray-600 dark:text-gray-400 mt-1">
-                      📈 Growth Rates: {news.filter(item => item.growthRate !== null).length}/{news.length} items have growth data
+                      📈 Growth Rates: {news.filter(item => item.growthRateValue !== null).length}/{news.length} items have growth data
                     </div>
                     <div className="text-gray-600 dark:text-gray-400 mt-1">
                       🔧 Enhanced UI Sections: {USE_LEGACY_MODAL_LAYOUT ? 'Enabled' : 'Disabled'}

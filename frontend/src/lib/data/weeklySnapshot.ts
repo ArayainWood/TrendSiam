@@ -63,19 +63,20 @@ export async function fetchWeeklySnapshot(snapshotId?: string): Promise<WeeklySn
       });
       
       const { data, error } = await supabase
-        .from('weekly_report_snapshots')
+        .from('public_v_weekly_snapshots')
         .select('*')
         .eq('snapshot_id', snapshotId)
-        .eq('status', 'published')
+        .eq('status', 'ready')
         .single();
       
       if (error || !data) {
         throw new Error(error?.message || `Snapshot ${snapshotId} not found`);
       }
       
-      // Extract and validate items
+      // Extract and validate items directly
       const items = (data.items as SnapshotItem[]) || [];
-      snapshot = { ...data, items };
+      const meta = data.meta || {};
+      snapshot = { ...data, items, meta };
     } else {
       // Use the repository to fetch latest
       snapshot = await fetchLatestWeekly();
@@ -83,7 +84,26 @@ export async function fetchWeeklySnapshot(snapshotId?: string): Promise<WeeklySn
       if (!snapshot) {
         // Log additional context for debugging
         console.error('[fetchWeeklySnapshot] No snapshots available. Check /api/weekly/diagnostics for details.');
-        throw new Error('No snapshots available');
+        
+        // Return a graceful empty state instead of throwing
+        return {
+          snapshotId: 'none',
+          builtAt: new Date().toISOString(),
+          rangeStart: new Date().toISOString(),
+          rangeEnd: new Date().toISOString(),
+          items: [],
+          metrics: {
+            totalStories: 0,
+            avgScore: 0,
+            categoryDistribution: {},
+            imagesCoverage: 0,
+            summariesCoverage: 0,
+            timeRange: 'No data available'
+          },
+          source: 'snapshot' as const,
+          success: false,
+          error: 'No snapshots available. Weekly snapshots need to be built first. Run: npm run snapshot:build:publish'
+        };
       }
     }
     
@@ -181,7 +201,7 @@ export async function hasNewerSnapshot(currentSnapshotId: string): Promise<boole
   try {
     // Get the current snapshot's built_at time
     const { data: current } = await supabase
-      .from('weekly_report_snapshots')
+      .from('public_v_weekly_snapshots')
       .select('built_at')
       .eq('snapshot_id', currentSnapshotId)
       .single();
@@ -190,9 +210,9 @@ export async function hasNewerSnapshot(currentSnapshotId: string): Promise<boole
     
     // Check if any newer snapshots exist
     const { count } = await supabase
-      .from('weekly_report_snapshots')
+      .from('public_v_weekly_snapshots')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'published')
+      .eq('status', 'ready')
       .gt('built_at', current.built_at);
     
     return (count || 0) > 0;

@@ -1,0 +1,55 @@
+# Playbook 2.0 — TrendSiam (Summary)
+
+## Goals
+- Consistent data contracts, reliable home feed, and security-by-default.
+
+## Security Model (Plan-B)
+- Frontend/API with **anon key** only.
+- Read **public_v_*** views only (no base-table reads).
+- Views use **SECURITY INVOKER**.
+- `GRANT SELECT` on public views to `anon, authenticated`.
+- `service_role` is **offline only** (pipelines, maintenance).
+
+## Home Feed Contract (public_v_home_news / home_feed_v1)
+- Columns (26): `id, title, summary, summary_en, category, platform, channel, published_at, source_url, image_url, ai_prompt, popularity_score, rank, is_top3, views, likes, comments, growth_rate_value, growth_rate_label, ai_opinion, score_details, external_id, keywords, updated_at, video_id, platform_mentions`.
+- Aliasing: `views←view_count, likes←like_count, comments←comment_count`.
+- Images/prompts: **Top-3 only**.
+
+## Freshness Policy
+- Primary: last **48h**.
+- Fallback: last **7 days** (dev may extend temporarily).
+- API must **not** hard-filter by date; rely on the view.
+
+## Diagnostics & Meta
+- Diagnostics read schema from `information_schema`.
+- Config/meta via **`public_v_system_meta`** (safe keys only: `home_limit, top3_max, news_last_updated`).
+- Never query base tables with anon.
+
+## Migrations & Grants
+- Ship SQL files that (a) create/repair views, (b) set INVOKER, (c) grant SELECT, (d) add verification SQL.
+
+## Acceptance Checklist
+- `/api/home/diagnostics`: success, no permission errors, `missingColumns: []`.
+- `/api/home`: returns data; Top-3 policy enforced.
+- No regressions on other pages.
+- `.mb` updated when behavior changes.
+
+## DB Execution Workflow (Added 2025-09-30)
+- **Canonical method**: Use `npm run db:run <sql-file>` for all database changes.
+- **Workflow phases**:
+  1. **Preflight**: Analyzes SQL for safety, enforces schema-qualified names, suggests idempotent patterns.
+  2. **Dry run**: Executes in BEGIN/ROLLBACK to validate syntax without changes.
+  3. **Real execution**: Single transaction with timeouts and automatic rollback on error.
+  4. **Post-verify**: Confirms objects created, tests selectability, records in schema_migrations.
+- **Safety features**:
+  - Staging by default; production requires explicit confirmation.
+  - Credential masking in all logs (stored in scripts/db/logs/).
+  - High-risk operations (DROP/ALTER) require additional confirmation.
+- **Requirements**:
+  - PostgreSQL client (psql) installed locally.
+  - SUPABASE_DB_URL in .env.local with ?sslmode=require.
+  - Must use Session Pooler host (aws-*.pooler.supabase.com), not direct host.
+- **Commands**:
+  - `npm run db:dry -- --file <sql>` - Dry run only
+  - `npm run db:exec -- --file <sql>` - Direct execution (skips preflight)
+  - `npm run db:run <sql>` - Full workflow (recommended)

@@ -47,7 +47,7 @@ export async function GET() {
       // Media fields
       displayImageUrl: normalizedItems.filter(item => item.displayImageUrl).length,
       isAIImage: normalizedItems.filter(item => item.isAIImage).length,
-      aiImagePrompt: normalizedItems.filter(item => item.aiImagePrompt).length,
+      aiImagePrompt: normalizedItems.filter(item => item.aiPrompt).length,
       
       // Metrics
       popularityScore: normalizedItems.filter(item => item.popularityScore > 0).length,
@@ -55,11 +55,11 @@ export async function GET() {
       views: normalizedItems.filter(item => item.views && item.views > 0).length,
       likes: normalizedItems.filter(item => item.likes && item.likes > 0).length,
       comments: normalizedItems.filter(item => item.comments && item.comments > 0).length,
-      growthRate: normalizedItems.filter(item => item.growthRate !== null).length,
+      growthRate: normalizedItems.filter(item => item.growthRateValue !== null).length,
       
       // Content fields
       reason: normalizedItems.filter(item => item.reason).length,
-      keywords: normalizedItems.filter(item => item.keywords && item.keywords.length > 0).length,
+      keywords: normalizedItems.filter(item => item.keywordsList && item.keywordsList.length > 0).length,
       aiOpinion: normalizedItems.filter(item => item.aiOpinion).length,
       scoreDetails: normalizedItems.filter(item => item.scoreDetails).length,
       
@@ -103,9 +103,9 @@ export async function GET() {
       title: item.title ? item.title.substring(0, 30) + '...' : null,
       summary_en: item.summary_en ? item.summary_en.substring(0, 40) + '...' : null,
       publishedAt: item.publishedAt,
-      aiImagePrompt: item.aiImagePrompt ? item.aiImagePrompt.substring(0, 40) + '...' : null,
+      aiImagePrompt: item.aiPrompt ? item.aiPrompt.substring(0, 40) + '...' : null,
       popularitySubtext: item.popularitySubtext,
-      growthRate: item.growthRate,
+      growthRate: item.growthRateValue,
       keywords: item.keywords
     }));
 

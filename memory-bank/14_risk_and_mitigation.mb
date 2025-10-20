@@ -1,0 +1,11 @@
+2025-09-30: Added: psql-runner + preflight/dry-run/exec/post-verify.
+• X API quota/cost: start with dev-scale ingestion; cache/retry; low weights in Score v1.
+• PDF failures: enforce Node runtime, embed fonts, precise error logs; keep a minimal fallback template.
+• Homepage emptiness: ensure AI image fallback; avoid over-strict filters; verify local-day in views.
+• Data drift: maintain view aliases when renaming columns to avoid breaking the frontend.
+• Database execution risks:
+  • Wrong environment: default to staging, require explicit confirmation for prod
+  • Destructive DDL: preflight flags DROP/ALTER operations, suggests safer alternatives
+  • Long locks: enforce lock_timeout (5s) and statement_timeout (30s) to prevent blocking
+  • Partial state: single transaction with ON_ERROR_STOP ensures atomic changes
+  • Credential exposure: mask passwords in all logs, store only in .env.local

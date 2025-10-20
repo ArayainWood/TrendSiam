@@ -1,0 +1,78 @@
+name: Weekly Schema Drift Check
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  schema-drift-check:
+    runs-on: ubuntu-latest
+    
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+        
+      - name: Check for Schema Drift
+        id: schema-check
+        working-directory: ./frontend
+        run: |
+          npm run db:guard || echo "schema_drift=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+        
+      - name: Create Issue if Drift Detected
+        if: steps.schema-check.outputs.schema_drift == 'true' && github.event_name != 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Database Schema Drift Detected',
+              body: `The weekly schema drift check has detected that the database schema has changed but the inventory has not been updated.
+              
+              ## Action Required
+              
+              1. Review what changed in the database schema
+              2. Run \`npm run db:inventory\` locally to update the schema inventory
+              3. Review the changes carefully
+              4. Commit and push the updated inventory files
+              5. Create a PR with the schema updates
+              
+              ## Files that need updating:
+              - \`docs/dev/baseline_db_inventory.md\`
+              - \`docs/dev/schema_map.json\`
+              - \`src/lib/db/schema-constants.ts\`
+              - \`memory-bank/db_schema_inventory.mb\`
+              
+              This is not blocking deployments but should be addressed soon to maintain schema consistency.`,
+              labels: ['schema-drift', 'maintenance']
+            });
+            
+            console.log(`Created issue #${issue.data.number}`);
+            
+      - name: Send Notification
+        if: steps.schema-check.outputs.schema_drift == 'true' && github.event_name == 'schedule'
+        run: |
+          echo "Schema drift detected! Check the created GitHub issue for details."
+          # Add additional notification methods here (Slack, email, etc.)

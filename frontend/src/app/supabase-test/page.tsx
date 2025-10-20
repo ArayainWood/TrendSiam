@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { supabase, supabaseUtils } from '../../lib/supabaseClient'
 import { NewsTrend } from '../../types'
 import { SupabaseNewsGrid } from '../../components/news/SupabaseNewsGrid'
+import type { HomeNewsItem } from '../../lib/data/newsClient'
 import { LoadingSpinner } from '../../components/ui/LoadingSpinner'
 
 interface TestResult {
@@ -18,7 +19,7 @@ export default function SupabaseTestPage() {
   const [testResults, setTestResults] = useState<TestResult[]>([])
   const [isRunningTests, setIsRunningTests] = useState(false)
   const [healthInfo, setHealthInfo] = useState<any>(null)
-  const [selectedNews, setSelectedNews] = useState<NewsTrend | null>(null)
+  const [selectedNews, setSelectedNews] = useState<HomeNewsItem | null>(null)
 
   useEffect(() => {
     // Get health info on component mount

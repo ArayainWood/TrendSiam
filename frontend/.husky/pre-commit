@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run schema guard first
+echo "🔍 Checking database schema..."
+npm run db:guard
+
+if [ $? -ne 0 ]; then
+  echo "❌ Schema check failed!"
+  echo "Run 'npm run db:inventory' to update the baseline and Memory Bank, then re-commit."
+  exit 1
+fi
+
+# Run TypeScript check
+echo "🔍 Checking TypeScript..."
+npm run check:types
+
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript check failed!"
+  echo "Fix the TypeScript errors before committing."
+  exit 1
+fi
+
+echo "✅ Pre-commit checks passed!"

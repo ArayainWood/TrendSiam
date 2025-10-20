@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🚀 Running pre-push checks..."
+
+# Run all checks
+npm run check:all
+
+if [ $? -ne 0 ]; then
+  echo "❌ Pre-push checks failed!"
+  echo "Fix all issues before pushing:"
+  echo "  - Schema changes: run 'npm run db:inventory'"
+  echo "  - TypeScript errors: fix compilation errors"
+  echo "  - API/view issues: ensure views match expected contract"
+  exit 1
+fi
+
+# Additional health check
+npm run check:health
+
+if [ $? -ne 0 ]; then
+  echo "❌ API health check failed!"
+  echo "Ensure the database view exists with all required columns"
+  exit 1
+fi
+
+echo "✅ All pre-push checks passed!"

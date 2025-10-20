@@ -97,19 +97,13 @@ export async function buildWeeklySnapshot(dryRun = false, shouldPublish = true):
     
     // 2. Check for concurrent builds (advisory lock via unique constraint)
     if (!dryRun) {
-      const { data: existing } = await supabase
+      // For now, clean up all building snapshots to avoid stuck state
+      await supabase
         .from('weekly_report_snapshots')
-        .select('snapshot_id, status')
-        .eq('status', 'building')
-        .single();
+        .delete()
+        .eq('status', 'building');
       
-      if (existing) {
-        console.log('[snapshotBuilder] Another build in progress:', existing.snapshot_id);
-        return {
-          success: false,
-          error: 'Another snapshot build is already in progress'
-        };
-      }
+      console.log('[snapshotBuilder] Cleaned up any building snapshots');
     }
     
     // 3. Query items from last 7 days (by ingested_at/created_at)
@@ -123,7 +117,7 @@ export async function buildWeeklySnapshot(dryRun = false, shouldPublish = true):
         date, category, ai_image_url, ai_image_prompt, 
         video_id, channel, view_count, published_date, 
         description, duration, like_count, comment_count, 
-        reason, keywords, score_details, created_at, updated_at
+        reason, keywords, score_details, created_at
       `)
       .gte('created_at', rangeStart.toISOString())
       .lte('created_at', rangeEnd.toISOString())
@@ -237,11 +231,13 @@ export async function buildWeeklySnapshot(dryRun = false, shouldPublish = true):
       };
     }
     
-    // 7. Create snapshot record
+    // 7. Create snapshot record with appropriate status
+    // Use 'ready' for published snapshots to match view expectations
+    const initialStatus = shouldPublish ? 'ready' : 'building';
     const { data: snapshot, error: insertError } = await supabase
       .from('weekly_report_snapshots')
       .insert({
-        status: 'building',
+        status: initialStatus,
         range_start: rangeStart.toISOString(),
         range_end: rangeEnd.toISOString(),
         algo_version: 'v1',
@@ -256,56 +252,19 @@ export async function buildWeeklySnapshot(dryRun = false, shouldPublish = true):
       throw new Error(`Failed to create snapshot: ${insertError?.message}`);
     }
     
-    // 8. Publish snapshot (atomic update) or mark as draft
+    // 8. Log completion
     if (shouldPublish) {
-      const { error: publishError } = await supabase
-        .from('weekly_report_snapshots')
-        .update({
-          status: 'published',
-          built_at: new Date().toISOString()
-        })
-        .eq('snapshot_id', snapshot.snapshot_id)
-        .eq('status', 'building'); // Ensure we only publish if still building
-      
-      if (publishError) {
-        // Try to clean up the failed snapshot
-        await supabase
-          .from('weekly_report_snapshots')
-          .delete()
-          .eq('snapshot_id', snapshot.snapshot_id);
-        
-        throw new Error(`Failed to publish snapshot: ${publishError.message}`);
-      }
-      
       console.log('[snapshotBuilder] Snapshot published:', {
         snapshotId: snapshot.snapshot_id,
         items: snapshotItems.length,
+        status: 'ready',
         duration: Date.now() - startTime
       });
     } else {
-      // Mark as draft instead of published
-      const { error: draftError } = await supabase
-        .from('weekly_report_snapshots')
-        .update({
-          status: 'draft',
-          built_at: new Date().toISOString()
-        })
-        .eq('snapshot_id', snapshot.snapshot_id)
-        .eq('status', 'building');
-      
-      if (draftError) {
-        // Try to clean up the failed snapshot
-        await supabase
-          .from('weekly_report_snapshots')
-          .delete()
-          .eq('snapshot_id', snapshot.snapshot_id);
-        
-        throw new Error(`Failed to mark snapshot as draft: ${draftError.message}`);
-      }
-      
       console.log('[snapshotBuilder] Snapshot saved as draft:', {
         snapshotId: snapshot.snapshot_id,
         items: snapshotItems.length,
+        status: 'building',
         duration: Date.now() - startTime
       });
     }
@@ -347,7 +306,7 @@ export async function getLatestSnapshot() {
   const { data, error } = await supabase
     .from('weekly_report_snapshots')
     .select('*')
-    .eq('status', 'published')
+    .eq('status', 'ready')
     .order('built_at', { ascending: false })
     .limit(1)
     .single();
@@ -370,7 +329,7 @@ export async function getSnapshotById(snapshotId: string) {
     .from('weekly_report_snapshots')
     .select('*')
     .eq('snapshot_id', snapshotId)
-    .eq('status', 'published')
+    .eq('status', 'ready')
     .single();
   
   if (error || !data) {

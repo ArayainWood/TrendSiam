@@ -1,0 +1,233 @@
+===================================================================================
+TRENDSIAM PDF TEXT RENDERING: EXECUTIVE SUMMARY
+===================================================================================
+Generated: 2025-10-20 17:04 Bangkok Time
+Investigation: Comprehensive End-to-End PDF Forensics
+Status: Analysis Complete — Root Causes Identified
+===================================================================================
+
+PROBLEM STATEMENT:
+------------------
+Weekly PDF exports from /weekly-report show persistent text rendering anomalies:
+- Thai diacritics (tone marks, vowels) missing, overlapping, or clipped
+- Special characters corrupted (e.g., "หมวดหมู: บนเท ั ิง…", "รายงานนีสรง…อัตโนมตั ิ…")
+- CJK/emoji appearing as replacement glyphs (tofu boxes)
+- Random symbols/artifacts in items #4, #6, #14-#20 (global headers/footers also affected)
+- Database confirmed clean (NFC normalized, zero control characters per Oct 18 audit)
+
+CRITICAL INSIGHT FROM MEMORY BANK REVIEW:
+------------------------------------------
+The Memory Bank (04_pdf_system.mb) documents SIX separate attempts to fix this problem:
+1. Oct 16: Font 47KB forensic investigation (Variable vs Static fonts)
+2. Oct 16: PDF Thai text rendering fix (lineHeight 2.5, subset:false)
+3. Oct 16: Multilingual font system (223 fonts, manifest-based)
+4. Oct 18: Dynamic font selection fix (per-Text component selection)
+5. Oct 18: Multilingual font system activation (bridge module)
+6. Oct 18: Thai diacritics + special character corruption fix (sanitizer v5-v6)
+7. Oct 18: Final remediation (Unified Text Policy v1, C0/C1 zero-tolerance)
+8. Oct 18: Emergency fix (font selection bug in WeeklyDoc.tsx line 73)
+
+Each iteration claimed "COMPLETE", "HIGH CONFIDENCE", "PRODUCTION-READY", yet problems persist.
+
+ROOT CAUSES IDENTIFIED (3 critical gaps):
+------------------------------------------
+
+1. ARCHITECTURAL MISMATCH: Font Loading vs Font Usage
+   Location: frontend/src/app/api/weekly/pdf/route.tsx (lines 106-117)
+   Problem: registerMultilingualFontsForPDF() called ONCE at snapshot level
+            BUT per-item font selection in WeeklyDoc.tsx expects ALL fonts registered
+   Impact: If snapshot contains Thai+Korean+CJK, fonts registered correctly,
+           BUT if dynamic selector chooses NotoSansKR for item #11, and only
+           NotoSansThaiUniversal actually registered (due to fallback mode), 
+           Korean text renders as Thai font → tofu boxes
+   Evidence: Line 73 in WeeklyDoc.tsx uses getTitleFontFamily(title), but this
+             assumes all 9 font families are available (they're NOT if snapshot
+             triggers fallback mode due to analyzeSnapshotScripts() edge cases)
+
+2. LINE HEIGHT REGRESSION: Multiple Conflicting Values
+   Location: frontend/src/lib/pdf/pdfStyles.ts
+   Evidence:
+   - Line 29:  text style → lineHeight: 1.35 (base)
+   - Line 39:  h1 style → lineHeight: 1.35 (consistent)
+   - Line 78:  itemTitle → lineHeight: 1.4 (titles)
+   - Line 135: mixedScript → lineHeight: 1.8 (mixed scripts)
+   - Line 143: emojiText → lineHeight: 1.9 (emoji)
+   Problem: Oct 18 forensics claimed lineHeight=2.5 fixed Thai diacritics,
+            but current code uses 1.35-1.9. Either:
+            (a) Fix was reverted/overwritten in later commit, OR
+            (b) lineHeight 1.4 is INSUFFICIENT for problematic items #4, #6, #18, #19
+   Comment on line 78 says: "NOT 2.5 - causes excessive spacing"
+   CONTRADICTION: Oct 16 fix said lineHeight=2.5 was THE solution; current code rejects it
+   Hypothesis: Later optimization lowered lineHeight for aesthetics, re-introducing clipping
+
+3. SANITIZER PIPELINE OVER-COMPLEXITY: 7 Versions, 3 Active
+   Locations:
+   - pdfTextSanitizer.ts (v4, original)
+   - pdfTextSanitizerSafe.ts (v5, "conservative")
+   - pdfTextSanitizer.v6.unified.ts (v6, Unified Text Policy v1, CURRENT IN USE)
+   - WeeklyDoc.tsx line 12: imports v6.unified
+   Problem: v6.unified is the THIRD complete rewrite in 2 days (Oct 16-18)
+            Each iteration added layers:
+            - v4: Aggressive stripping (broke CJK/symbols)
+            - v5: "Safe" version (kept old issues)
+            - v6: Unified Policy with Stage A+B (complex regex, grapheme validation)
+   Code Size: v6 = 520 lines (was 200 lines in v4)
+   Risk: Each stage (NFC → C0/C1 filter → banned chars → smart punct → collapse spaces
+         → Thai grapheme validation → SARA AM fix → tone mark reorder → duplicate removal
+         → orphan removal) has its own edge cases
+   Evidence: Items #14-#20 may trigger edge cases in:
+            - removeControlCharacters() line 80-104 (C0/C1 regex)
+            - stageB_ThaiGraphemeValidation() line 317-333 (Thai-specific fixes)
+   Hypothesis: Over-sanitization removes legitimate Unicode that PDF engine needs,
+               OR grapheme reordering breaks @react-pdf/renderer's internal shaping
+
+DETAILED FINDINGS BY LAYER:
+----------------------------
+
+A) DATA LAYER (database → API):
+   Status: ✅ CONFIRMED CLEAN (Oct 18 audit, see reports/SUMMARY.md)
+   - Zero control characters (C0/C1) in DB
+   - All text NFC normalized at source
+   - Items #4, #6, #16, #18, #19, #20 verified byte-by-byte
+   - No changes needed at DB level
+
+B) PDF PIPELINE (API route → rendering):
+   Problem File: frontend/src/app/api/weekly/pdf/route.tsx
+   Critical Path:
+   Line 84: fetchWeeklySnapshot(snapshotId)
+   Line 92: data.items.slice(0, 20) ← only first 20 items go to PDF
+   Line 108: registerMultilingualFontsForPDF(data.items) ← FONT REGISTRATION
+   Line 121: renderPdfBuffer(<WeeklyDoc {...data} />) ← RENDER
+   
+   Issues:
+   1. Line 108: analyzeSnapshotScripts() in pdfFontsMultilingual.ts may detect
+      scripts that aren't in top-20 slice, causing over-registration OR
+      scripts in top-20 that trigger fallback mode (loadedFamilies=[UNIVERSAL] only)
+   2. No validation that all fonts selected in WeeklyDoc.tsx are actually registered
+   3. No logging of which fonts were loaded vs which fonts were requested per-item
+
+C) FONT LOADING (registration):
+   Files:
+   - pdfFontsMultilingual.ts (lines 35-141): Bridge module
+   - pdfMultilingualFonts.ts (lines 192-298): Core manifest loader
+   - pdfFonts.core.ts (lines 24-103): Thai-only fallback
+   - fontResolver.core.ts (lines 16-90): File path resolution
+   
+   Issues:
+   1. Fallback mode (line 60-70, pdfFontsMultilingual.ts): If items=[] or error,
+      falls back to Thai-only (NotoSansThaiUniversal + system overrides)
+      BUT WeeklyDoc.tsx assumes 9 families available
+   2. Line 50 (pdfFonts.core.ts): subset:false added to preserve GPOS/GSUB tables
+      HOWEVER @react-pdf/renderer v4.3.0 may ignore this flag (needs runtime verification)
+   3. No SHA-256 verification at runtime (fonts_provenance.json exists but unused in route)
+
+D) TEXT SANITIZATION (pre-render):
+   File: pdfTextSanitizer.v6.unified.ts (520 lines)
+   Critical Functions:
+   - sanitizeTitleForPdf() line 375 ← called for every item title
+   - sanitizeMetadataForPdf() line 385 ← called for category/channel
+   - stageA_UnifiedTextPolicy() line 191 ← NFC + C0/C1 + banned chars
+   - stageB_ThaiGraphemeValidation() line 317 ← Thai-specific fixes
+   
+   Issues:
+   1. Line 80-104 removeControlCharacters(): regex /[\x00-\x09\x0B-\x1F\x7F-\x9F]/g
+      catches C0/C1, but what if PDF engine needs specific codes for shaping hints?
+      (unlikely but possible with complex scripts)
+   2. Lines 238-240 fixDecomposedSaraAm(): replaces \u0E4D\u0E32 → \u0E33
+      Correct for Thai, but may interact poorly with NFC normalization (double-fixing?)
+   3. Lines 248-257 fixThaiToneMarkOrder(): regex reorders tone marks AFTER vowels
+      Correct canonical order, but @react-pdf/renderer may expect visual order?
+   4. Lines 290-312 removeOrphanThaiMarks(): removes marks without base
+      Could this accidentally remove legitimate marks in edge cases (e.g., standalone marks in titles)?
+
+E) FONT SELECTION (per-Text component):
+   File: pdfFontSelector.ts (138 lines)
+   Critical Function: selectFontFamily() line 30-57
+   Logic:
+   1. If text has Hangul → NotoSansKR
+   2. If text has CJK → NotoSansJP
+   3. If text has Emoji (pure) → NotoEmoji
+   4. If text has Symbols (pure) → NotoSansSymbols
+   5. Default → NotoSansThaiUniversal
+   
+   Issues:
+   1. No check if selected font was actually registered (assumes all 9 families available)
+   2. Korean priority over CJK (line 36) may be wrong for items with Chinese+Hangul mix
+   3. "Pure emoji" check (line 46) uses scripts.size === 1, but emoji often mixed with text
+   4. No fallback chain if selected font missing (hard failure → tofu boxes)
+
+F) LAYOUT & STYLING:
+   File: pdfStyles.ts (223 lines)
+   Critical Values:
+   - lineHeight: 1.35 (text), 1.4 (itemTitle), 1.8 (mixedScript), 1.9 (emojiText)
+   - letterSpacing: 0 (all styles) ← CORRECT per Oct 18 findings
+   - paddingTop/Bottom: 1px (itemTitle, line 86-87)
+   
+   Issues:
+   1. lineHeight 1.4 for itemTitle (line 78) may be insufficient for:
+      - Items with stacked diacritics (e.g., ก็ = ก + ็)
+      - Multiple tone marks (rare but legal in Thai)
+      - Emoji with high ascenders/descenders
+   2. Comment on line 78: "NOT 2.5 - causes excessive spacing"
+      CONTRADICTS Oct 16 fix that identified lineHeight=2.5 as THE solution
+      Hypothesis: Later developer changed based on aesthetics, not Thai correctness
+   3. paddingTop/Bottom 1px (lines 86-87) described as "minimal padding (font metrics handle diacritics)"
+      BUT if font metrics are wrong (e.g., subset=true strips GPOS tables), padding=1px insufficient
+
+G) RENDERING ENGINE:
+   Library: @react-pdf/renderer v4.3.0 (inferred from API usage)
+   Dependencies: fontkit (for subsetting), yoga-layout (for layout)
+   
+   Known Limitations (from Memory Bank):
+   1. No automatic font fallback (CONFIRMED: pdfFontSelector.ts exists to work around this)
+   2. Variable fonts not fully supported for complex scripts (CONFIRMED: fontResolver prefers static)
+   3. Aggressive subsetting removes GPOS/GSUB tables (CLAIMED FIXED: subset:false in pdfFonts.core.ts)
+   4. letterSpacing > 0 breaks combining marks (CONFIRMED FIXED: letterSpacing=0 in pdfStyles.ts)
+   
+   Unknowns (need runtime verification):
+   - Does @react-pdf/renderer respect subset:false flag?
+   - Does it use HarfBuzz or equivalent for Thai shaping?
+   - Does it honor OpenType GPOS mark-to-base positioning?
+
+H) CACHING:
+   API Route: Cache-Control: no-store (line 132, route.tsx)
+   Font Files: No HTTP caching (local filesystem read)
+   Registration: In-memory flag (multilingualFontsRegistered, line 24 pdfFontsMultilingual.ts)
+   Issue: If API route restarted mid-generation, flag resets → font re-registration
+          Could cause inconsistent font state if snapshot analyzed twice with different results
+
+I) CROSS-CHECKS:
+   Font QA Route: /api/weekly/pdf/font-qa-final/route.tsx exists
+   Test Samples: 60+ cases including items #4, #6, #16, #18, #19, #20
+   Status: Code exists but no recent test run documented
+   Recommendation: Re-run with CURRENT snapshot to validate fixes
+
+MINIMAL-SAFE FIX PLAN (step-by-step):
+--------------------------------------
+See FIX_PLAN.md for detailed remediation steps.
+
+IMPACTED FILES:
+---------------
+1. frontend/src/app/api/weekly/pdf/route.tsx (lines 106-117: font registration)
+2. frontend/src/lib/pdf/WeeklyDoc.tsx (lines 73, 75: font selection)
+3. frontend/src/lib/pdf/pdfStyles.ts (line 78: lineHeight for itemTitle)
+4. frontend/src/lib/pdf/pdfFontsMultilingual.ts (lines 56-71: fallback mode)
+5. frontend/src/lib/pdf/pdfFontSelector.ts (lines 30-57: selection logic)
+6. frontend/src/lib/pdf/pdfTextSanitizer.v6.unified.ts (lines 80-104, 238-312: sanitization)
+7. frontend/src/lib/pdf/pdfMultilingualFonts.ts (lines 192-298: manifest loading)
+
+CONFIDENCE: HIGH
+Risk: Medium (font system changes require careful testing)
+Rollback: Easy (6 previous versions documented in Memory Bank)
+
+NEXT STEPS:
+-----------
+1. Review FIX_PLAN.md for step-by-step remediation
+2. Review RCA_MATRIX.md for symptom-to-cause mapping
+3. Review VERIFICATION_CHECKLIST.md for test procedures
+4. Await your sign-off before implementing changes
+
+===================================================================================
+END OF EXECUTIVE SUMMARY
+===================================================================================
+

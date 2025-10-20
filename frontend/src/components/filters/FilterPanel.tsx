@@ -24,7 +24,7 @@ export function FilterPanel() {
   }, [news])
 
   const platforms = useMemo(() => {
-    const plats = Array.from(new Set(news.map(item => item.channel))).filter(Boolean)
+    const plats = Array.from(new Set(news.map(item => item.channel))).filter((channel): channel is string => Boolean(channel))
     return plats.sort().slice(0, 10) // Limit to top 10 channels
   }, [news])
 

@@ -1,0 +1,518 @@
+/**
+ * PUBLISHED_AT vs SNAPSHOT_DATE Complete Fix
+ * Date: 2025-10-10
+ * 
+ * CRITICAL FIXES:
+ * 1. Story Details "Published" label shows platform published_at (display-only)
+ * 2. Home ranking uses snapshot_date (created_at/date) for freshness (Thai TZ)
+ * 3. Expose BOTH fields distinctly in views to prevent confusion
+ * 4. Fix high-score items appearing at bottom due to mixing old snapshots with new
+ * 
+ * ROOT CAUSES IDENTIFIED:
+ * - Previous migration (2025-10-09) filtered by published_at to determine "today"
+ * - This causes old platform content to never appear even if recently ingested
+ * - High scores from older snapshots mixed with new low scores
+ * - No clear separation between "when platform published" vs "when we captured it"
+ * 
+ * SOLUTION:
+ * - Use news_trends.created_at or news_trends.date as snapshot_date (ingestion time)
+ * - Filter/rank by snapshot_date (Thai TZ) for freshness
+ * - Keep published_at for display only (platform's original date)
+ * - Add snapshot_date field to view for transparency
+ * 
+ * IDEMPOTENT: Safe to run multiple times
+ * SECURITY: Plan-B compliant (DEFINER view, no base grants)
+ * TIMEZONE: Asia/Bangkok for all date boundaries
+ */
+
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+-- ============================================================================
+-- STEP 1: Add snapshot_date column to news_trends if not exists
+-- ============================================================================
+
+-- Check if news_trends.date exists (snapshot date), if not use created_at
+-- The "date" column should be the ingestion/snapshot date in Thai TZ
+
+DO $$
+BEGIN
+  -- Check if 'date' column exists in news_trends
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'news_trends'
+      AND column_name = 'date'
+  ) THEN
+    -- Add date column as snapshot date (computed from created_at in Thai TZ)
+    ALTER TABLE public.news_trends
+      ADD COLUMN date DATE;
+    
+    -- Backfill with created_at converted to Thai TZ date
+    UPDATE public.news_trends
+    SET date = DATE(created_at AT TIME ZONE 'Asia/Bangkok')
+    WHERE date IS NULL;
+    
+    RAISE NOTICE 'Added and backfilled news_trends.date column';
+  END IF;
+END $$;
+
+-- ============================================================================
+-- STEP 2: Create helper view for latest snapshots (if not exists)
+-- ============================================================================
+
+DROP VIEW IF EXISTS public.public_v_latest_snapshots CASCADE;
+
+CREATE VIEW public.public_v_latest_snapshots
+WITH (security_barrier = true, security_invoker = false) AS
+SELECT DISTINCT ON (story_id)
+  story_id,
+  snapshot_date,
+  view_count,
+  like_count,
+  comment_count,
+  popularity_score,
+  rank,
+  growth_rate,
+  ai_opinion,
+  platform_mentions,
+  created_at
+FROM public.snapshots
+ORDER BY story_id, snapshot_date DESC NULLS LAST, created_at DESC NULLS LAST;
+
+GRANT SELECT ON public.public_v_latest_snapshots TO anon, authenticated;
+
+COMMENT ON VIEW public.public_v_latest_snapshots IS
+'Latest snapshot per story for current metrics. Ordered by snapshot_date DESC.';
+
+-- ============================================================================
+-- STEP 3: Recreate public_v_home_news with SNAPSHOT_DATE filtering
+-- ============================================================================
+
+DROP VIEW IF EXISTS public.home_feed_v1 CASCADE;
+DROP VIEW IF EXISTS public.public_v_home_news CASCADE;
+
+CREATE VIEW public.public_v_home_news 
+WITH (security_invoker = false, security_barrier = true) AS
+WITH
+-- Get today's date in Thai timezone
+thai_today AS (
+  SELECT DATE(NOW() AT TIME ZONE 'Asia/Bangkok') AS today
+),
+
+-- Primary window: TODAY's snapshot (by ingestion/created_at, not platform published_at)
+today_items AS (
+  SELECT
+    nt.id::text AS id,
+    nt.title,
+    nt.summary,
+    COALESCE(st.summary_en, nt.summary_en) AS summary_en,
+    nt.category,
+    CASE 
+      WHEN LOWER(nt.platform) = 'youtube' THEN 'YouTube'
+      ELSE nt.platform
+    END AS platform,
+    nt.channel,
+    -- DISPLAY-ONLY: Platform's original publish date
+    COALESCE(st.publish_time, nt.published_at) AS published_at,
+    -- RANKING/FILTERING: Our snapshot/ingestion date
+    COALESCE(nt.date, DATE(nt.created_at AT TIME ZONE 'Asia/Bangkok')) AS snapshot_date,
+    CASE
+      WHEN LOWER(nt.platform) = 'youtube' AND nt.external_id IS NOT NULL 
+        THEN 'https://www.youtube.com/watch?v=' || nt.external_id
+      WHEN LOWER(nt.platform) = 'youtube' AND nt.video_id IS NOT NULL 
+        THEN 'https://www.youtube.com/watch?v=' || nt.video_id
+      ELSE nt.source_url
+    END AS source_url,
+    img.image_url AS ai_generated_image,
+    nt.ai_image_url AS platform_thumbnail,
+    COALESCE(img.ai_prompt, st.ai_image_prompt, nt.ai_image_prompt) AS ai_prompt,
+    nt.popularity_score,
+    -- Rank WITHIN today's snapshot: is_top3 DESC, score DESC, video_views DESC, id ASC
+    ROW_NUMBER() OVER (
+      ORDER BY 
+        CASE WHEN ROW_NUMBER() OVER (ORDER BY nt.popularity_score DESC NULLS LAST) <= 3 THEN 0 ELSE 1 END,  -- is_top3 DESC
+        nt.popularity_score DESC NULLS LAST,  -- score DESC
+        COALESCE(
+          CASE 
+            WHEN snap.view_count ~ '^[0-9]+$' THEN snap.view_count::bigint
+            WHEN snap.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(snap.view_count, '[^0-9]', '', 'g')::bigint
+            ELSE NULL
+          END,
+          CASE 
+            WHEN nt.view_count ~ '^[0-9]+$' THEN nt.view_count::bigint
+            WHEN nt.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(nt.view_count, '[^0-9]', '', 'g')::bigint
+            ELSE NULL
+          END,
+          0
+        ) DESC NULLS LAST,  -- video_views DESC
+        nt.id ASC  -- deterministic tiebreaker
+    ) AS rank,
+    COALESCE(
+      CASE 
+        WHEN snap.view_count ~ '^[0-9]+$' THEN snap.view_count::bigint
+        WHEN snap.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(snap.view_count, '[^0-9]', '', 'g')::bigint
+        ELSE NULL
+      END,
+      CASE 
+        WHEN nt.view_count ~ '^[0-9]+$' THEN nt.view_count::bigint
+        WHEN nt.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(nt.view_count, '[^0-9]', '', 'g')::bigint
+        ELSE NULL
+      END,
+      0
+    ) AS video_views,
+    COALESCE(
+      CASE WHEN nt.like_count ~ '^[0-9]+$' THEN nt.like_count::bigint ELSE NULL END,
+      0
+    ) AS likes,
+    COALESCE(
+      CASE WHEN nt.comment_count ~ '^[0-9]+$' THEN nt.comment_count::bigint ELSE NULL END,
+      0
+    ) AS comments,
+    CASE
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ '^-?\d+(\.\d+)?%?$'
+        THEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric
+      ELSE NULL
+    END AS growth_rate_value,
+    CASE
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ '^-?\d+(\.\d+)?%?$' THEN
+        CASE
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric >= 1000000 THEN 'Viral (>1M/day)'
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric >= 100000 THEN 'High (>100K/day)'
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric >= 10000 THEN 'Moderate (>10K/day)'
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric > 0 THEN 'Growing'
+          ELSE 'Stable'
+        END
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ 'Viral|viral' THEN 'Viral (>1M/day)'
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ 'High|high' THEN 'High (>100K/day)'
+      ELSE 'Growing'
+    END AS growth_rate_label,
+    COALESCE(snap.ai_opinion, nt.ai_opinion) AS ai_opinion,
+    nt.score_details::text AS score_details,
+    nt.video_id,
+    nt.external_id,
+    COALESCE(snap.platform_mentions, nt.platform_mentions, 'Primary platform only') AS platform_mentions,
+    nt.keywords,
+    GREATEST(nt.updated_at, st.updated_at, snap.created_at, img.last_verified_at) AS updated_at,
+    1 AS priority  -- TODAY items = priority 1
+  FROM news_trends nt
+  CROSS JOIN thai_today tt
+  LEFT JOIN stories st ON st.story_id::text = nt.id::text
+  LEFT JOIN public_v_latest_snapshots snap ON snap.story_id::text = st.story_id::text
+  LEFT JOIN public_v_ai_images_latest img ON img.story_id::text = st.story_id::text
+  WHERE LOWER(nt.platform) = 'youtube'
+    AND nt.title IS NOT NULL
+    AND nt.title != ''
+    -- TODAY filter by SNAPSHOT date (when we ingested), NOT platform published_at
+    AND COALESCE(nt.date, DATE(nt.created_at AT TIME ZONE 'Asia/Bangkok')) = tt.today
+),
+
+-- Fallback window: Last 60 days by snapshot date (if today has <20 items)
+fallback_items AS (
+  SELECT
+    nt.id::text AS id,
+    nt.title,
+    nt.summary,
+    COALESCE(st.summary_en, nt.summary_en) AS summary_en,
+    nt.category,
+    CASE 
+      WHEN LOWER(nt.platform) = 'youtube' THEN 'YouTube'
+      ELSE nt.platform
+    END AS platform,
+    nt.channel,
+    -- DISPLAY-ONLY: Platform's original publish date
+    COALESCE(st.publish_time, nt.published_at) AS published_at,
+    -- RANKING/FILTERING: Our snapshot/ingestion date
+    COALESCE(nt.date, DATE(nt.created_at AT TIME ZONE 'Asia/Bangkok')) AS snapshot_date,
+    CASE
+      WHEN LOWER(nt.platform) = 'youtube' AND nt.external_id IS NOT NULL 
+        THEN 'https://www.youtube.com/watch?v=' || nt.external_id
+      WHEN LOWER(nt.platform) = 'youtube' AND nt.video_id IS NOT NULL 
+        THEN 'https://www.youtube.com/watch?v=' || nt.video_id
+      ELSE nt.source_url
+    END AS source_url,
+    img.image_url AS ai_generated_image,
+    nt.ai_image_url AS platform_thumbnail,
+    COALESCE(img.ai_prompt, st.ai_image_prompt, nt.ai_image_prompt) AS ai_prompt,
+    nt.popularity_score,
+    -- Fallback rank: snapshot_date DESC (newest snapshots first), then is_top3 DESC, score DESC, views DESC, id ASC
+    1000 + ROW_NUMBER() OVER (
+      ORDER BY 
+        COALESCE(nt.date, DATE(nt.created_at AT TIME ZONE 'Asia/Bangkok')) DESC,  -- snapshot_date DESC
+        CASE WHEN ROW_NUMBER() OVER (PARTITION BY COALESCE(nt.date, DATE(nt.created_at AT TIME ZONE 'Asia/Bangkok')) ORDER BY nt.popularity_score DESC NULLS LAST) <= 3 THEN 0 ELSE 1 END,  -- is_top3 DESC within each date
+        nt.popularity_score DESC NULLS LAST,  -- score DESC
+        COALESCE(
+          CASE 
+            WHEN snap.view_count ~ '^[0-9]+$' THEN snap.view_count::bigint
+            WHEN snap.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(snap.view_count, '[^0-9]', '', 'g')::bigint
+            ELSE NULL
+          END,
+          CASE 
+            WHEN nt.view_count ~ '^[0-9]+$' THEN nt.view_count::bigint
+            WHEN nt.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(nt.view_count, '[^0-9]', '', 'g')::bigint
+            ELSE NULL
+          END,
+          0
+        ) DESC NULLS LAST,  -- video_views DESC
+        nt.id ASC  -- deterministic tiebreaker
+    ) AS rank,
+    COALESCE(
+      CASE 
+        WHEN snap.view_count ~ '^[0-9]+$' THEN snap.view_count::bigint
+        WHEN snap.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(snap.view_count, '[^0-9]', '', 'g')::bigint
+        ELSE NULL
+      END,
+      CASE 
+        WHEN nt.view_count ~ '^[0-9]+$' THEN nt.view_count::bigint
+        WHEN nt.view_count ~ '[0-9]+' THEN REGEXP_REPLACE(nt.view_count, '[^0-9]', '', 'g')::bigint
+        ELSE NULL
+      END,
+      0
+    ) AS video_views,
+    COALESCE(
+      CASE WHEN nt.like_count ~ '^[0-9]+$' THEN nt.like_count::bigint ELSE NULL END,
+      0
+    ) AS likes,
+    COALESCE(
+      CASE WHEN nt.comment_count ~ '^[0-9]+$' THEN nt.comment_count::bigint ELSE NULL END,
+      0
+    ) AS comments,
+    CASE
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ '^-?\d+(\.\d+)?%?$'
+        THEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric
+      ELSE NULL
+    END AS growth_rate_value,
+    CASE
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ '^-?\d+(\.\d+)?%?$' THEN
+        CASE
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric >= 1000000 THEN 'Viral (>1M/day)'
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric >= 100000 THEN 'High (>100K/day)'
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric >= 10000 THEN 'Moderate (>10K/day)'
+          WHEN REPLACE(TRIM(COALESCE(snap.growth_rate, nt.growth_rate)), '%', '')::numeric > 0 THEN 'Growing'
+          ELSE 'Stable'
+        END
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ 'Viral|viral' THEN 'Viral (>1M/day)'
+      WHEN COALESCE(snap.growth_rate, nt.growth_rate) ~ 'High|high' THEN 'High (>100K/day)'
+      ELSE 'Growing'
+    END AS growth_rate_label,
+    COALESCE(snap.ai_opinion, nt.ai_opinion) AS ai_opinion,
+    nt.score_details::text AS score_details,
+    nt.video_id,
+    nt.external_id,
+    COALESCE(snap.platform_mentions, nt.platform_mentions, 'Primary platform only') AS platform_mentions,
+    nt.keywords,
+    GREATEST(nt.updated_at, st.updated_at, snap.created_at, img.last_verified_at) AS updated_at,
+    2 AS priority  -- FALLBACK items = priority 2
+  FROM news_trends nt
+  CROSS JOIN thai_today tt
+  LEFT JOIN stories st ON st.story_id::text = nt.id::text
+  LEFT JOIN public_v_latest_snapshots snap ON snap.story_id::text = st.story_id::text
+  LEFT JOIN public_v_ai_images_latest img ON img.story_id::text = st.story_id::text
+  WHERE LOWER(nt.platform) = 'youtube'
+    AND nt.title IS NOT NULL
+    AND nt.title != ''
+    -- Fallback: Last 60 days by SNAPSHOT date, EXCLUDING today
+    AND COALESCE(nt.date, DATE(nt.created_at AT TIME ZONE 'Asia/Bangkok')) < tt.today
+    AND COALESCE(nt.date, DATE(nt.created_at AT TIME ZONE 'Asia/Bangkok')) >= tt.today - INTERVAL '60 days'
+    -- ONLY use fallback if today has <20 items
+    AND (SELECT COUNT(*) FROM today_items) < 20
+),
+
+-- Combine primary and fallback
+combined_items AS (
+  SELECT * FROM today_items
+  UNION ALL
+  SELECT * FROM fallback_items
+)
+
+-- Final SELECT with ALL required columns including snapshot_date
+SELECT
+  id, title, summary, summary_en, category, platform, channel, 
+  published_at,  -- Platform's original publish date (DISPLAY ONLY)
+  snapshot_date,  -- Our ingestion/snapshot date (RANKING/FILTERING ONLY)
+  source_url,
+  ai_generated_image, platform_thumbnail, ai_prompt, popularity_score, rank,
+  video_views, likes, comments, growth_rate_value, growth_rate_label,
+  ai_opinion, score_details, video_id, external_id, platform_mentions, keywords, updated_at,
+  priority
+FROM combined_items
+ORDER BY priority ASC, rank ASC NULLS LAST;
+
+GRANT SELECT ON public.public_v_home_news TO anon, authenticated;
+
+COMMENT ON VIEW public.public_v_home_news IS 
+'Home news view with SNAPSHOT_DATE filtering (NOT published_at).
+published_at = Platform''s original publish date (display-only, Story Details).
+snapshot_date = Our ingestion date (ranking/filtering, Thai TZ).
+Primary: Today''s snapshot (by ingestion date) ranked by: is_top3 DESC, score DESC, video_views DESC, id ASC.
+Fallback: Last 60 days if today <20 items, ordered by: snapshot_date DESC, then within each date by is_top3/score/views/id.
+Updated: 2025-10-10 - Separated published_at (display) from snapshot_date (ranking).';
+
+-- ============================================================================
+-- STEP 4: Recreate home_feed_v1 (29 columns with snapshot_date + backward compat)
+-- ============================================================================
+
+CREATE VIEW public.home_feed_v1
+WITH (security_barrier = true, security_invoker = false)
+AS
+SELECT 
+  v.id,
+  v.title,
+  v.summary,
+  v.summary_en,
+  v.category,
+  v.platform,
+  v.channel,
+  v.published_at,      -- Platform's original publish date (DISPLAY ONLY - Story Details label)
+  v.snapshot_date,     -- Our ingestion/snapshot date (RANKING/FILTERING ONLY - not shown in UI)
+  v.source_url,
+  -- Image with fallback: AI image (Top-3 only) or platform thumbnail
+  CASE 
+    WHEN v.rank <= 3 AND v.ai_generated_image IS NOT NULL THEN v.ai_generated_image
+    WHEN v.rank <= 3 AND v.platform_thumbnail IS NOT NULL THEN v.platform_thumbnail
+    ELSE NULL
+  END AS image_url,
+  CASE WHEN v.rank <= 3 THEN v.ai_prompt ELSE NULL END AS ai_prompt,
+  v.popularity_score,
+  v.rank,
+  (v.rank IS NOT NULL AND v.rank <= 3) AS is_top3,
+  v.video_views,
+  v.video_views AS views,  -- Legacy alias for backward compatibility
+  v.likes,
+  v.comments,
+  v.growth_rate_value,
+  v.growth_rate_label,
+  v.ai_opinion,
+  v.score_details,
+  v.video_id,
+  v.external_id,
+  v.platform_mentions,
+  v.keywords,
+  v.updated_at,
+  COALESCE(nt.site_click_count, 0) AS web_view_count
+FROM public.public_v_home_news v
+JOIN news_trends nt ON nt.id::text = v.id
+ORDER BY v.priority ASC, v.rank ASC NULLS LAST;
+
+GRANT SELECT ON public.home_feed_v1 TO anon, authenticated;
+
+COMMENT ON VIEW public.home_feed_v1 IS 
+'Canonical home view (29 columns). NOW WITH SNAPSHOT_DATE.
+published_at = Platform publish date (display-only, Story Details).
+snapshot_date = Ingestion date (ranking/filtering, Thai TZ).
+Image fallback: AI (if available) → platform thumbnail (Top-3 only).
+Ranking: Today''s snapshot (by snapshot_date) → is_top3 DESC, score DESC, video_views DESC, id ASC.
+Fallback: Last 60 days if today <20, ordered by snapshot_date DESC → is_top3/score/views/id.
+Updated: 2025-10-10 - Added snapshot_date, fixed ranking to use ingestion date.';
+
+-- ============================================================================
+-- STEP 5: Update HOME_COLUMNS constant (add snapshot_date)
+-- ============================================================================
+
+COMMENT ON COLUMN public.home_feed_v1.published_at IS 
+'Platform''s original publish date. USE FOR DISPLAY ONLY in Story Details. DO NOT use for ranking/filtering.';
+
+COMMENT ON COLUMN public.home_feed_v1.snapshot_date IS 
+'Our ingestion/snapshot date (Thai TZ). USE FOR RANKING/FILTERING ONLY. DO NOT display in UI (internal use).';
+
+-- ============================================================================
+-- STEP 6: Update System Metadata
+-- ============================================================================
+
+INSERT INTO public.system_meta (key, value, updated_at)
+VALUES 
+  ('home_view_version', '2025-10-10_published_vs_snapshot_fix', NOW()),
+  ('home_freshness_policy', 'snapshot_date_primary:thai_tz|60d_fallback', NOW()),
+  ('ranking_policy', 'freshness_first:snapshot_date|is_top3_desc|score_desc|video_views_desc|id_asc', NOW()),
+  ('published_at_policy', 'display_only:story_details|never_use_for_ranking', NOW())
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at;
+
+-- ============================================================================
+-- STEP 7: Verification
+-- ============================================================================
+
+\echo ''
+\echo '--- Verification: View exists and has data ---'
+SELECT 
+  'public_v_home_news' AS view_name,
+  COUNT(*) AS row_count,
+  MIN(rank) AS min_rank,
+  MAX(rank) AS max_rank
+FROM public.public_v_home_news;
+
+SELECT 
+  'home_feed_v1' AS view_name,
+  COUNT(*) AS row_count,
+  COUNT(CASE WHEN is_top3 THEN 1 END) AS top3_count,
+  COUNT(CASE WHEN image_url IS NOT NULL THEN 1 END) AS images_count
+FROM public.home_feed_v1;
+
+\echo ''
+\echo '--- Verification: Date separation (published_at vs snapshot_date) ---'
+SELECT 
+  id,
+  LEFT(title, 30) AS title,
+  published_at::date AS platform_date,
+  snapshot_date AS ingestion_date,
+  CASE WHEN published_at::date = snapshot_date THEN 'SAME' ELSE 'DIFFERENT' END AS date_comparison,
+  rank,
+  ROUND(popularity_score::numeric, 1) AS score
+FROM public.home_feed_v1
+ORDER BY rank
+LIMIT 10;
+
+\echo ''
+\echo '--- Verification: Today vs Fallback distribution ---'
+WITH date_summary AS (
+  SELECT
+    snapshot_date,
+    COUNT(*) AS item_count,
+    MIN(rank) AS min_rank,
+    MAX(rank) AS max_rank,
+    ROUND(AVG(popularity_score)::numeric, 1) AS avg_score,
+    CASE WHEN snapshot_date = (SELECT DATE(NOW() AT TIME ZONE 'Asia/Bangkok')) THEN 'TODAY' ELSE 'FALLBACK' END AS window_type
+  FROM public.home_feed_v1
+  GROUP BY snapshot_date
+  ORDER BY snapshot_date DESC
+  LIMIT 5
+)
+SELECT * FROM date_summary;
+
+\echo ''
+\echo '--- Verification: Ranking determinism (top 5 + bottom 5 from same date) ---'
+WITH same_date_items AS (
+  SELECT 
+    snapshot_date,
+    rank,
+    LEFT(title, 35) AS title,
+    is_top3,
+    ROUND(popularity_score::numeric, 1) AS score,
+    video_views
+  FROM public.home_feed_v1
+  WHERE snapshot_date = (SELECT DATE(NOW() AT TIME ZONE 'Asia/Bangkok'))
+)
+SELECT * FROM (
+  SELECT * FROM same_date_items ORDER BY rank LIMIT 5
+  UNION ALL
+  SELECT * FROM same_date_items ORDER BY rank DESC LIMIT 5
+) AS combined
+ORDER BY rank;
+
+COMMIT;
+
+\echo ''
+\echo '✅ Migration complete. Published vs Snapshot separation now enforced.'
+\echo 'Key changes:'
+\echo '  - published_at = Platform date (display-only, Story Details)'
+\echo '  - snapshot_date = Ingestion date (ranking/filtering, Thai TZ)'
+\echo '  - Ranking: freshness-first by snapshot_date, then is_top3 DESC, score DESC, video_views DESC, id ASC'
+\echo '  - Fallback: Previous dates AFTER today, never intermixed'
+\echo ''
+\echo 'Next steps:'
+\echo '  1. Update frontend: Add snapshot_date to HOME_COLUMNS (lib/db/schema-constants.ts)'
+\echo '  2. Update mapper: Map snapshot_date (optional, internal use)'
+\echo '  3. Verify Story Details shows published_at (already correct)'
+\echo '  4. Run: node frontend/scripts/data-freshness-check.mjs'
+\echo ''
+

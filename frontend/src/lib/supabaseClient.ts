@@ -75,10 +75,10 @@ export const supabaseUtils = {
     }
   },
 
-  // Test connection to Supabase
+  // Test connection to Supabase using public view (Plan-B compliant)
   testConnection: async (): Promise<boolean> => {
     try {
-      const { error } = await supabase.from('news_trends').select('count', { count: 'exact', head: true })
+      const { error } = await supabase.from('public_v_home_news').select('count', { count: 'exact', head: true })
       return !error
     } catch {
       return false

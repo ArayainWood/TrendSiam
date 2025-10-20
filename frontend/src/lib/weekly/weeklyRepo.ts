@@ -59,9 +59,9 @@ export async function fetchLatestWeekly(): Promise<WeeklySnapshot | null> {
   
   try {
     // Step 1: Try to fetch from view
-    console.log('[weeklyRepo] Trying weekly_report_public_v view...');
+    console.log('[weeklyRepo] Trying public_v_weekly_snapshots view...');
     const { data: viewData, error: viewError } = await supabase
-      .from('weekly_report_public_v')
+      .from('public_v_weekly_snapshots')
       .select(COLS)
       .order('built_at', { ascending: false })
       .limit(1)
@@ -79,30 +79,9 @@ export async function fetchLatestWeekly(): Promise<WeeklySnapshot | null> {
       console.log('[weeklyRepo] View error (might not exist):', viewError.message);
     }
     
-    // Step 2: Fallback to table with status filter
-    console.log('[weeklyRepo] Falling back to weekly_report_snapshots table...');
-    const { data: tableData, error: tableError } = await supabase
-      .from('weekly_report_snapshots')
-      .select(COLS)
-      .eq('status', 'published')
-      .order('built_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (!tableError && tableData) {
-      console.log('[weeklyRepo] Found published snapshot in table');
-      try {
-        const validated = WeeklySnap.parse(tableData);
-        return validated;
-      } catch (e) {
-        console.warn('[weeklyRepo] Table data validation failed:', e);
-      }
-    } else if (tableError) {
-      console.error('[weeklyRepo] Table error:', tableError.message);
-    }
-    
-    // No snapshots found
-    console.warn('[weeklyRepo] No snapshots found in view or table');
+    // Step 2: No fallback to base table - Plan-B compliance
+    console.log('[weeklyRepo] No fallback to base table - Plan-B security enforced');
+    console.warn('[weeklyRepo] View access failed, no snapshots available');
     return null;
     
   } catch (error) {
@@ -150,7 +129,7 @@ export async function getDiagnosticCounts() {
   try {
     // Count from view
     const { count: viewCount } = await supabase
-      .from('weekly_report_public_v')
+      .from('public_v_weekly_snapshots')
       .select('*', { count: 'exact', head: true });
     
     results.viewCount = viewCount || 0;
@@ -158,28 +137,9 @@ export async function getDiagnosticCounts() {
     // View might not exist
   }
   
-  try {
-    // Count published from table
-    const { count: publishedCount } = await supabase
-      .from('weekly_report_snapshots')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'published');
-    
-    results.tablePublishedCount = publishedCount || 0;
-  } catch (e) {
-    console.error('[weeklyRepo] Error counting published:', e);
-  }
-  
-  try {
-    // Total count from table
-    const { count: totalCount } = await supabase
-      .from('weekly_report_snapshots')
-      .select('*', { count: 'exact', head: true });
-    
-    results.tableTotalCount = totalCount || 0;
-  } catch (e) {
-    console.error('[weeklyRepo] Error counting total:', e);
-  }
+  // Plan-B: No direct table access from client
+  results.tablePublishedCount = 0;
+  results.tableTotalCount = 0;
   
   return results;
 }
@@ -200,7 +160,7 @@ export async function fetchDiagnosticData() {
   try {
     // Latest from view
     const { data: viewData } = await supabase
-      .from('weekly_report_public_v')
+      .from('public_v_weekly_snapshots')
       .select(COLS)
       .order('built_at', { ascending: false })
       .limit(1)
@@ -218,27 +178,8 @@ export async function fetchDiagnosticData() {
     // View might not exist
   }
   
-  try {
-    // Latest published from table
-    const { data: tableData } = await supabase
-      .from('weekly_report_snapshots')
-      .select(COLS)
-      .eq('status', 'published')
-      .order('built_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (tableData) {
-      diagnostics.latestPublishedFromTable = {
-        snapshot_id: tableData.snapshot_id,
-        status: tableData.status,
-        built_at: tableData.built_at,
-        item_count: countTotalStories(tableData)
-      };
-    }
-  } catch (e) {
-    console.error('[weeklyRepo] Error fetching table data:', e);
-  }
+  // Plan-B: No direct table access from client
+  diagnostics.latestPublishedFromTable = null;
   
   return diagnostics;
 }

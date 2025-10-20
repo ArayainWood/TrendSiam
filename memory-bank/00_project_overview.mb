@@ -1,0 +1,18 @@
+• Project: TrendSiam — an AI-powered Thai trend/news intelligence platform.
+• Audience: marketers, journalists, analysts, social media teams in Thailand (Thai-first, EN optional).
+• Core value: aggregates public trending content (now: YouTube + X), summarizes in Thai/EN, classifies, scores popularity, compares platforms, outputs weekly PDF, and (MVP) AI short videos for Top-3.
+• Platforms (current scope): YouTube (official API), X (official API, MVP scale). Future expansion (later): Google Trends, Thai news sites, Instagram.
+• Image policy: only AI-generated images for Top-3 (no 3rd-party thumbnails). Always label "AI-generated."
+• Bilingual: full TH/EN toggle across UI, summaries, tags, and PDF.
+• Legal-first: analyze public content only, attribute sources, link originals, respect PDPA and platform ToS.
+• Frontend: Next.js (responsive, SEO, share buttons, light/dark).
+• Backend/data: Supabase (Postgres). Region: SEA (Singapore). Current plan: Pro.
+• Product stance: quality and credibility first; stable daily updates in Thai time.
+
+## Further Reading
+- docs/DB_AUTOMATION_PLAYBOOK.md (database automation standard)
+- memory-bank/00_db_automation_standard.mb (DB automation summary)
+- memory-bank/01_security_plan_b.mb (security patterns)
+- memory-bank/03_frontend_homepage_freshness.mb (homepage & API patterns)
+- memory-bank/09_playbook2_core_roadmap.mb (roadmap)
+- memory-bank/13_testing_acceptance_criteria.mb (testing standards)

@@ -1,0 +1,4 @@
+• Only AI-generated images are allowed for Top-3 visuals. Never use copyrighted thumbnails or scraped images.
+• Each image card must display the AI-generated label. Provide a "View AI Prompt" button for Top-3 items only.
+• Fallback logic: if an image is missing, auto-generate (if allowed by budget) or use a safe internal placeholder that is clearly AI-generated.
+• Costs: budget for AI images ~฿150–180/month (target). Prioritize Top-3 only.

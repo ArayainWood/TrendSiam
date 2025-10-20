@@ -1,0 +1,4 @@
+• Auth: Supabase Auth (email link/password). Store minimal profile (role: free/premium).
+• Gate: downloading any PDF requires login; Free gets the basic PDF; Premium (later) gets full analytics.
+• Do not implement billing yet; show "Upgrade to Premium" page as a future step.
+• Rate-limits and activity logs for sensitive actions (downloads).

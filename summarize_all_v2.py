@@ -348,7 +348,7 @@ class TrendSiamNewsIngester:
             logger.error("Failed to update popularity scores: %s", e)
     
     def set_system_meta(self, key: str, value: str) -> None:
-        """Set system metadata for cache busting."""
+        """Set system metadata for cache busting with Asia/Bangkok timezone."""
         if not self.supabase_enabled:
             logger.error("Supabase not available for system_meta update")
             return
@@ -358,10 +358,19 @@ class TrendSiamNewsIngester:
             return
         
         try:
+            # Use Asia/Bangkok timezone for consistency
+            import pytz
+            
+            bangkok_tz = pytz.timezone('Asia/Bangkok')
+            bangkok_time = datetime.now(bangkok_tz)
+            timestamp_value = bangkok_time.isoformat()
+            
             self.supabase_client.table('system_meta').upsert({
-                'key': key, 'value': value
+                'key': key, 
+                'value': timestamp_value,
+                'updated_at': timestamp_value
             }, on_conflict='key').execute()
-            logger.info("LOG:UPDATED_AT=%s", value)
+            logger.info("LOG:UPDATED_AT=%s (Asia/Bangkok)", timestamp_value)
         except Exception as e:
             logger.error("Failed to set system_meta: %s", e)
     
@@ -425,6 +434,8 @@ class TrendSiamNewsIngester:
         # SECTION C: JSON fallback only if explicitly allowed
         if not self.allow_json_fallback:
             logger.error("SECTION C: No live data available and JSON fallback disabled")
+            logger.error("SECTION C: Set YOUTUBE_API_KEY or ALLOW_JSON_FALLBACK=true to proceed")
+            logger.error("SECTION C: Pipeline will exit with no data to prevent stale content")
             return []
         
         # Fallback to static file (only when allowed)
@@ -453,7 +464,7 @@ class TrendSiamNewsIngester:
     def _fetch_live_youtube_data(self) -> Optional[List[Dict[str, Any]]]:
         """Fetch live data from YouTube API with proper error handling."""
         try:
-            # Try YouTube Data API v3 first (most reliable)
+            # Try YouTube Data API v3 first (most reliable for fresh metrics)
             try:
                 from youtube_api_fetcher import YouTubeAPIFetcher
                 fetcher = YouTubeAPIFetcher()
@@ -470,24 +481,41 @@ class TrendSiamNewsIngester:
                     if self.limit and self.limit > 0:
                         transformed_videos = transformed_videos[:self.limit]
                     
-                    logger.info(f"✅ [data-freshness] YouTube API: {len(transformed_videos)} videos transformed")
+                    logger.info(f"✅ [data-freshness] YouTube API: {len(transformed_videos)} videos with fresh metrics")
                     return transformed_videos
                     
             except Exception as api_error:
                 logger.warning(f"⚠️ [data-freshness] YouTube API failed: {api_error}")
             
-            # Fallback to yt-dlp method
+            # Fallback to yt-dlp method (limited metrics)
             try:
                 from youtube_fetcher import YouTubeTrendingFetcher
                 fetcher = YouTubeTrendingFetcher()
                 raw_videos = fetcher.fetch_trending_videos()
                 
                 if raw_videos:
-                    if self.limit and self.limit > 0:
-                        raw_videos = raw_videos[:self.limit]
+                    # Enhance yt-dlp data with YouTube API metrics if possible
+                    enhanced_videos = []
+                    for video in raw_videos:
+                        enhanced_video = video.copy()
+                        # Try to get fresh metrics from YouTube API for each video
+                        if video.get('video_id'):
+                            try:
+                                from youtube_api_fetcher import YouTubeAPIFetcher
+                                api_fetcher = YouTubeAPIFetcher()
+                                # Get individual video stats
+                                video_stats = self._get_video_stats(video['video_id'])
+                                if video_stats:
+                                    enhanced_video.update(video_stats)
+                            except Exception:
+                                pass  # Use yt-dlp data as fallback
+                        enhanced_videos.append(enhanced_video)
                     
-                    logger.info(f"✅ [data-freshness] yt-dlp: {len(raw_videos)} videos fetched")
-                    return raw_videos
+                    if self.limit and self.limit > 0:
+                        enhanced_videos = enhanced_videos[:self.limit]
+                    
+                    logger.info(f"✅ [data-freshness] yt-dlp enhanced: {len(enhanced_videos)} videos")
+                    return enhanced_videos
                     
             except Exception as ytdl_error:
                 logger.warning(f"⚠️ [data-freshness] yt-dlp failed: {ytdl_error}")
@@ -498,6 +526,44 @@ class TrendSiamNewsIngester:
             logger.error(f"❌ [data-freshness] Live fetch completely failed: {e}")
             return None
 
+    def _get_video_stats(self, video_id: str) -> Optional[Dict[str, Any]]:
+        """Get fresh statistics for a single video from YouTube API."""
+        try:
+            import requests
+            import os
+            
+            api_key = os.getenv('YOUTUBE_API_KEY')
+            if not api_key:
+                return None
+            
+            url = 'https://www.googleapis.com/youtube/v3/videos'
+            params = {
+                'key': api_key,
+                'id': video_id,
+                'part': 'statistics',
+                'fields': 'items(statistics(viewCount,likeCount,commentCount))'
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            items = data.get('items', [])
+            
+            if items:
+                stats = items[0].get('statistics', {})
+                return {
+                    'view_count': stats.get('viewCount', '0'),
+                    'like_count': stats.get('likeCount', '0'),
+                    'comment_count': stats.get('commentCount', '0')
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Failed to get fresh stats for {video_id}: {e}")
+            return None
+    
     def _transform_youtube_api_video(self, video: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Transform YouTube Data API v3 format to expected pipeline format."""
         try:
@@ -1172,11 +1238,13 @@ class TrendSiamNewsIngester:
                     
                     spec_items.append(spec_item)
                 
+                logger.info(f"📤 [UPSERT] target_table=news_trends rows={len(spec_items)} conflict_resolution=platform,external_id")
                 result = self.supabase_client.table('news_trends').upsert(
                     spec_items,
                     on_conflict='platform,external_id'  
                 ).execute()
-                stories_count = len(result.data)
+                stories_count = len(result.data) if result.data else len(spec_items)
+                logger.info(f"✅ [UPSERT] upserted_rows={stories_count} target_table=news_trends")
                 
                 # [AI-PROMPT-PRIMARY] Also upsert to stories table as primary source of truth
                 try:
@@ -1198,11 +1266,13 @@ class TrendSiamNewsIngester:
                             stories_items.append(story_item)
                     
                     if stories_items:
+                        logger.info(f"📤 [UPSERT] target_table=stories rows={len(stories_items)} conflict_resolution=story_id")
                         stories_result = self.supabase_client.table('stories').upsert(
                             stories_items,
                             on_conflict='story_id'
                         ).execute()
-                        logger.info(f"✅ [AI-PROMPT-PRIMARY] UPSERT stories: {len(stories_result.data)} items")
+                        stories_upserted = len(stories_result.data) if stories_result.data else len(stories_items)
+                        logger.info(f"✅ [UPSERT] upserted_rows={stories_upserted} target_table=stories")
                         
                         # Log AI prompt coverage for verification
                         prompts_count = sum(1 for item in stories_items if item.get('ai_image_prompt', '').strip())
@@ -1254,6 +1324,9 @@ class TrendSiamNewsIngester:
                 if self.emit_revalidate:
                     self._emit_revalidate_signal()
                 
+                # [data-freshness] Always trigger cache invalidation after successful DB writes
+                self._trigger_cache_invalidation()
+                
                 return True
             else:
                 logger.warning("No valid items to save")
@@ -1292,6 +1365,38 @@ class TrendSiamNewsIngester:
                 
         except Exception as e:
             logger.warning(f"⚠️ [data-freshness] Failed to emit revalidate signal: {e}")
+    
+    def _trigger_cache_invalidation(self) -> None:
+        """Trigger Next.js cache invalidation for home page data."""
+        try:
+            import requests
+            import os
+            
+            # Get revalidate secret and base URL from environment
+            revalidate_secret = os.getenv('REVALIDATE_SECRET')
+            base_url = os.getenv('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
+            
+            if not revalidate_secret:
+                logger.warning("[data-freshness] REVALIDATE_SECRET not set - skipping cache invalidation")
+                return
+            
+            # Invalidate home page cache tag
+            revalidate_url = f"{base_url}/api/revalidate"
+            params = {
+                'tag': 'home-news',
+                'token': revalidate_secret
+            }
+            
+            logger.info("[data-freshness] Triggering home page cache invalidation...")
+            response = requests.get(revalidate_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                logger.info(f"✅ [REVALIDATE] revalidated=home-news status={response.status_code}")
+            else:
+                logger.warning(f"⚠️ [REVALIDATE] failed=home-news status={response.status_code} error={response.text[:100]}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ [data-freshness] Failed to trigger cache invalidation: {e}")
     
     def save_to_json(self, videos: List[Dict[str, Any]]) -> bool:
         """SECTION C: JSON output disabled - Supabase only."""
@@ -1444,8 +1549,8 @@ class TrendSiamNewsIngester:
             # Step 7: Generate end-of-run report
             self.generate_end_of_run_report(final_videos)
             
-            # SECTION C: Always update system_meta for cache busting
-            self.set_system_meta('news_last_updated', datetime.now(timezone.utc).isoformat())
+            # SECTION C: Always update system_meta for cache busting (Asia/Bangkok timezone)
+            self.set_system_meta('news_last_updated', 'updated')
             
             # V2 summary fix: Determine exit code based on summary coverage and other metrics
             # Calculate summary coverage for exit code determination

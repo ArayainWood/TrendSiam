@@ -1,0 +1,11 @@
+2025-09-30: Added: psql-runner + preflight/dry-run/exec/post-verify.
+2025-09-30: Updated: Session Pooler required by default for database connections.
+• Do not touch .env / .env.local automatically. Never rotate or write keys. No secrets in memory files.
+• Frontend: uses only NEXT_PUBLIC_* and Supabase anon key. Backend jobs: service_role key (never client).
+• Respect the user's rule: "do not push to GitHub automatically (do not push)."
+• Keep environment parity notes, but not values. Document required variable names only.
+• Database migrations: SUPABASE_DB_URL stored only in .env.local (root level), must include ?sslmode=require
+• .gitignore blocks .env.local and scripts/db/logs/* to prevent credential leaks
+• Session Pooler: Use aws-*.pooler.supabase.com host, not db.*.supabase.co (direct host forbidden without --allow-direct flag)
+• Feature flags (dev only):
+  • HOME_USE_DEMO=true - Use demo seed data instead of real data (never set in production)

@@ -8,7 +8,7 @@ import type { UINewsItem } from '../../lib/normalizeNewsItem'
 import toast from 'react-hot-toast'
 import { newsApi } from '../../lib/api'
 import { getFreshAIImageUrl } from '../../lib/imageUtils'
-import { isTop3, selectCardImage, debugImageSelection } from '../../lib/imagePolicy'
+
 import { getPopularitySubtext, formatPopularityScore, getPopularityColor, getPopularityBg } from '../../lib/helpers/popularityHelpers'
 
 interface NewsCardProps {
@@ -20,19 +20,14 @@ export function NewsCard({ news, index }: NewsCardProps) {
   const { language, developerMode } = useUIStore()
   const [showDetails, setShowDetails] = useState(false)
   const [imageError, setImageError] = useState(false)
-  const [internalViews, setInternalViews] = useState(0)
+  
+  // Use webViewCount from API response (site-specific click tracking)
+  const internalViews = news.webViewCount || 0
 
-  // Load internal views when component mounts
+  // Reset modal state when news item changes to prevent AI prompt leak
   useEffect(() => {
-    if (news?.video_id) {
-      newsApi.getNewsViews(news.video_id).then((views: number) => {
-        setInternalViews(views)
-      }).catch((error: unknown) => {
-        // Failed to load view count - using default
-        setInternalViews(0)
-      })
-    }
-  }, [news?.video_id])
+    setShowDetails(false)
+  }, [news?.id, news?.video_id])
 
   const formatNumber = (num: string | number | null | undefined) => {
     if (!num || num === '0') return '0'
@@ -96,34 +91,13 @@ export function NewsCard({ news, index }: NewsCardProps) {
   }
 
   const summary = language.code === 'th' ? news.summary : (news.summary_en || news.summary)
-  const storyIsTop3 = isTop3(news)
-  const imageSelection = selectCardImage(news, { isTop3: storyIsTop3 })
-  
-  // Debug logging (temporary)
-  debugImageSelection(news, undefined, 'NewsCard', imageSelection)
 
-  // Debug logging for second story image issue
-  useEffect(() => {
-    if (news.rank === 2) {
-      console.log('🐛 SECOND STORY DEBUG:', {
-        rank: news.rank,
-        title: news.title?.substring(0, 40) + '...',
-        ai_image_url: news.isAIImage ? news.displayImageUrl : null,
-        display_image_url: news.displayImageUrl,
-        video_id: news.video_id,
-        hasAiImage: news.isAIImage,
-        hasDisplayImage: news.displayImageUrl && news.displayImageUrl !== '/placeholder-image.svg',
-        imageError: imageError,
-        isTop3: storyIsTop3,
-        finalImageUrl: news.displayImageUrl
-      })
-    }
-  }, [news.rank, news.isAIImage, news.displayImageUrl, imageError, storyIsTop3])
+
 
   return (
-    <article className={`news-card p-6 ${storyIsTop3 ? 'ring-2 ring-accent-200 dark:ring-accent-800' : ''}`}>
+    <article className={`news-card p-6 ${news.showImage ? 'ring-2 ring-accent-200 dark:ring-accent-800' : ''}`}>
       {/* Top banner for top 3 */}
-      {storyIsTop3 && (
+      {news.showImage && (
         <div className="flex items-center gap-2 mb-4 -mt-2 -mx-2 px-4 py-2 bg-gradient-to-r from-accent-500 to-thai-500 text-white rounded-t-2xl">
           <Star className="w-4 h-4" />
           <span className="text-sm font-semibold">
@@ -181,31 +155,33 @@ export function NewsCard({ news, index }: NewsCardProps) {
           </div>
         </div>
 
-        {/* Image Section - show for all items with graceful fallback */}
-        <div className="relative">
-          <div 
-            className="aspect-video bg-concrete-100 dark:bg-void-800 rounded-lg overflow-hidden"
-          >
-            <img
-              src={news.displayImageUrl}
-              alt={`Illustration for: ${news.title}`}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                console.warn(`Image load failed for story #${news.rank}, using placeholder`);
-                (e.currentTarget as HTMLImageElement).src = '/placeholder-image.svg';
-              }}
-            />
-          </div>
-            
-          {/* AI-Generated Badge - Only show for top 3 with AI images */}
-          {storyIsTop3 && news.isAIImage && (
-            <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-full backdrop-blur-sm border border-white/20">
-              <span className="flex items-center gap-1">
-                🤖 <span className="font-medium">AI-Generated</span>
-              </span>
+        {/* Image Section - show only for top-3 stories with images */}
+        {news.showImage && (
+          <div className="relative">
+            <div 
+              className="aspect-video bg-concrete-100 dark:bg-void-800 rounded-lg overflow-hidden"
+            >
+              <img
+                src={news.displayImageUrl}
+                alt={`Illustration for: ${news.title}`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.warn(`Image load failed for story #${news.rank}, using placeholder`);
+                  (e.currentTarget as HTMLImageElement).src = '/placeholder-image.svg';
+                }}
+              />
             </div>
-          )}
-        </div>
+            
+            {/* AI-Generated Badge - Only show for top 3 with AI images */}
+            {news.showImage && news.isAIImage && (
+              <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-full backdrop-blur-sm border border-white/20">
+                <span className="flex items-center gap-1">
+                  🤖 <span className="font-medium">AI-Generated</span>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Category */}
         <div className="flex items-center gap-2">
@@ -296,7 +272,7 @@ export function NewsCard({ news, index }: NewsCardProps) {
                     <span className="ml-2 font-mono">{news.popularity_score_precise?.toFixed(6)}</span>
                   </div>
                   
-                  {news.ai_image_prompt && (
+                  {news.showAiPrompt && (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-accent-600 dark:text-accent-400 font-medium">AI Prompt:</span>

@@ -5,6 +5,9 @@
  * Protected by secret header for security
  */
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';

@@ -1,11 +1,11 @@
 -- =============================================
--- Home News View (v_home_news)
--- Optimized view for Home page with display_image_url_raw
+-- Home News View (v_home_news) - Fixed Version
+-- Optimized view for Home page with proper column mapping
 -- =============================================
 
 DROP VIEW IF EXISTS public.v_home_news CASCADE;
 
-CREATE VIEW public.v_home_news 
+CREATE OR REPLACE VIEW public.v_home_news 
 WITH (security_invoker = true) AS
 SELECT 
   -- Core identifiers
@@ -38,31 +38,26 @@ SELECT
   nt.comment_count AS comments,
   nt.comment_count,
   
-  -- Scores
+  -- Scores (create popularity_score_precise alias pointing to popularity_score)
   nt.popularity_score,
-  nt.popularity_score_precise,
+  nt.popularity_score AS popularity_score_precise,
   
-  -- Growth metrics
+  -- Growth metrics (if exists, otherwise NULL)
   nt.growth_rate,
   
+  -- AI and analysis fields (if they exist)
   nt.ai_opinion,
   nt.score_details,
+  nt.reason,
+  nt.keywords,
+  nt.platform_mentions,
   
-  -- Image fields
+  -- Image fields with backward compatibility
   nt.ai_image_url,
-  -- AI Prompt with fallback chain: stories.ai_image_prompt -> news_trends.ai_image_prompt -> image_files.reason -> snapshots.reason
+  nt.ai_image_url AS image_url,  -- Backward compatibility alias
   COALESCE(
-    s.ai_image_prompt,                                   -- Primary: stories table
-    nt.ai_image_prompt,                                  -- Fallback 1: news_trends table
-    (SELECT reason FROM image_files 
-     WHERE story_id = nt.video_id 
-       AND is_valid = true 
-       AND reason IS NOT NULL 
-     ORDER BY generated_at DESC LIMIT 1),               -- Fallback 2: latest valid image file reason
-    (SELECT reason FROM snapshots 
-     WHERE story_id = nt.video_id 
-       AND reason IS NOT NULL 
-     ORDER BY snapshot_date DESC LIMIT 1)              -- Fallback 3: latest snapshot reason
+    nt.ai_image_prompt,                              -- Primary: news_trends table
+    s.ai_image_prompt                                -- Fallback: stories table
   ) AS ai_image_prompt,
   COALESCE(
     nt.ai_image_url,                                 -- AI-generated image (primary)
@@ -70,34 +65,24 @@ SELECT
   ) AS display_image_url_raw,
   (nt.ai_image_url IS NOT NULL) AS is_ai_image,
   
-  -- Analysis (safe fields only)
-  nt.reason,
-  nt.keywords,
-  
-  -- Platform fields with fallback chain
-  nt.platform_mentions,
+  -- Platform fields with simple fallback
   COALESCE(
     s.platform,                                      -- Primary: stories table
-    nt.platform,                                     -- Fallback 1: news_trends platform
-    nt.platform_mentions,                            -- Fallback 2: news_trends platform_mentions
-    (SELECT platform_mentions FROM snapshots 
-     WHERE story_id = nt.video_id 
-       AND platform_mentions IS NOT NULL 
-     ORDER BY snapshot_date DESC LIMIT 1)           -- Fallback 3: latest snapshot platform_mentions
+    nt.platform                                      -- Fallback: news_trends platform
   ) AS platforms_raw,
   
   -- Additional fields
   nt.description,
   nt.duration
-  
+
 FROM public.news_trends nt
 LEFT JOIN public.stories s ON s.story_id = nt.video_id
 WHERE 
-  -- Show published content with recent fallback
+  -- Show published content with recent fallback (restored original logic)
   nt.published_date IS NOT NULL
   OR nt.created_at >= CURRENT_TIMESTAMP - INTERVAL '7 days'
 ORDER BY 
-  COALESCE(nt.popularity_score_precise, nt.popularity_score, 0) DESC, 
+  COALESCE(nt.popularity_score, 0) DESC, 
   nt.published_date DESC NULLS LAST;
 
 -- Set proper ownership and security
@@ -111,10 +96,16 @@ GRANT SELECT ON public.v_home_news TO anon, authenticated, service_role;
 COMMENT ON VIEW public.v_home_news IS 
 'Optimized view for Home page with display_image_url_raw for client-side normalization';
 
--- Verification query
+-- Test the view to ensure it compiles
+SELECT * FROM public.v_home_news LIMIT 5;
+
+-- Verification query to check key fields
 SELECT 
   COUNT(*) as total_items,
   COUNT(ai_image_url) as items_with_ai_images,
+  COUNT(image_url) as items_with_image_url_alias,
+  COUNT(popularity_score) as items_with_popularity_score,
+  COUNT(popularity_score_precise) as items_with_popularity_score_precise,
   COUNT(CASE WHEN display_image_url_raw = '/placeholder-image.svg' THEN 1 END) as items_using_placeholder,
   COUNT(CASE WHEN is_ai_image THEN 1 END) as items_marked_as_ai
 FROM public.v_home_news

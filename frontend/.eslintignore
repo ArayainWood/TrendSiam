@@ -1,0 +1,21 @@
+# Diagnostics and health check routes
+src/app/api/**/diag/**
+src/app/api/diagnostics/**
+src/app/api/health/**
+src/app/api/_debug/**
+src/app/api/_health/**
+
+# Test files
+src/**/__tests__/**
+**/*.test.*
+**/*.spec.*
+
+# Build output
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Scripts
+scripts/

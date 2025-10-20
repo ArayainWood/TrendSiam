@@ -172,6 +172,11 @@ celerybeat.pid
 !.vscode/extensions.json
 *.code-workspace
 
+# Postgrestools LSP local config (contains credentials)
+.vscode/postgrestools.local.jsonc
+postgrestools.local.jsonc
+**/.vscode/postgrestools*.json*
+
 # JetBrains IDEs
 .idea/
 *.iws
@@ -352,9 +357,15 @@ settings.local.json
 *.heapprofile
 *.log
 
+# Database execution logs
+scripts/db/logs/
+
 # Monitoring and analytics
 .monitoring/
 analytics/
+
+.cursor/
+
 
 # ================================================================
 # END OF FILE
