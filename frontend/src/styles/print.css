@@ -1,0 +1,292 @@
+/**
+ * Print Stylesheet for Chromium PDF Generation
+ * 
+ * Optimized for A4 paper with proper Thai/CJK rendering
+ * Matches web UI layout while ensuring print quality
+ */
+
+/* Font imports - Self-hosted for consistency */
+@font-face {
+  font-family: 'Noto Sans Thai';
+  src: url('/fonts/NotoSansThai/NotoSansThai-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block; /* Ensure font loads before print */
+}
+
+@font-face {
+  font-family: 'Noto Sans Thai';
+  src: url('/fonts/NotoSansThai/NotoSansThai-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  src: url('/fonts/NotoSansKR/NotoSansKR-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Sans KR';
+  src: url('/fonts/NotoSansKR/NotoSansKR-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Sans JP';
+  src: url('/fonts/NotoSansJP/NotoSansJP-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Sans JP';
+  src: url('/fonts/NotoSansJP/NotoSansJP-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Sans Symbols';
+  src: url('/fonts/NotoSansSymbols/NotoSansSymbols-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Noto Emoji';
+  src: url('/fonts/NotoEmoji/NotoEmoji-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Page setup */
+@page {
+  size: A4;
+  margin: 20mm 15mm 20mm 15mm;
+  
+  @top-center {
+    content: "TrendSiam Weekly Report";
+    font-family: 'Noto Sans Thai', sans-serif;
+    font-size: 9pt;
+    color: #999;
+  }
+  
+  @bottom-center {
+    content: counter(page) " / " counter(pages);
+    font-family: 'Noto Sans Thai', sans-serif;
+    font-size: 9pt;
+    color: #999;
+  }
+}
+
+/* Print color adjustment */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+}
+
+/* Base typography with font cascade */
+body {
+  font-family: 'Noto Sans Thai', 'Noto Sans KR', 'Noto Sans JP', 
+               'Noto Sans Symbols', 'Noto Emoji', sans-serif;
+  font-size: 11pt;
+  line-height: 1.6;
+  color: #000;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+  
+  /* Prevent font substitution */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Thai-safe line heights */
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.8; /* Extra space for diacritics */
+  page-break-after: avoid;
+  page-break-inside: avoid;
+}
+
+h1 {
+  font-size: 18pt;
+  font-weight: 700;
+  margin: 0 0 12pt 0;
+  padding: 4pt 0;
+}
+
+h2 {
+  font-size: 14pt;
+  font-weight: 700;
+  margin: 0 0 8pt 0;
+  padding: 3pt 0;
+}
+
+/* Content containers */
+.container {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Item styles with proper spacing */
+.item {
+  margin-bottom: 12pt;
+  padding: 8pt 0;
+  border-bottom: 0.5pt solid #e5e5e5;
+  page-break-inside: avoid;
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.item-title {
+  font-size: 11pt;
+  font-weight: 700;
+  line-height: 1.8; /* Critical for Thai */
+  margin-bottom: 4pt;
+  
+  /* Extra padding for diacritics */
+  padding-top: 3pt;
+  padding-bottom: 3pt;
+  
+  /* Prevent breaking */
+  page-break-inside: avoid;
+  orphans: 3;
+  widows: 3;
+}
+
+.item-meta {
+  font-size: 9pt;
+  color: #666;
+  line-height: 1.6;
+  
+  /* Metadata layout */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12pt;
+}
+
+.item-meta > span {
+  white-space: nowrap;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  page-break-inside: avoid;
+  margin: 12pt 0;
+}
+
+th, td {
+  padding: 6pt;
+  border: 0.5pt solid #ddd;
+  text-align: left;
+  line-height: 1.6;
+}
+
+th {
+  background-color: #f5f5f5;
+  font-weight: 700;
+}
+
+/* Footer */
+.footer {
+  margin-top: 24pt;
+  padding-top: 12pt;
+  border-top: 1pt solid #ddd;
+  font-size: 9pt;
+  color: #666;
+  text-align: center;
+  line-height: 1.8;
+}
+
+/* Utility classes */
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mb-4 {
+  margin-bottom: 4pt;
+}
+
+.mb-8 {
+  margin-bottom: 8pt;
+}
+
+.mb-12 {
+  margin-bottom: 12pt;
+}
+
+.page-break {
+  page-break-after: always;
+}
+
+.avoid-break {
+  page-break-inside: avoid;
+}
+
+/* Mixed script handling */
+.mixed-script {
+  /* Explicit font stack for mixed content */
+  font-family: 'Noto Sans Thai', 'Noto Sans KR', 'Noto Sans JP',
+               'Noto Sans Symbols', 'Noto Emoji', sans-serif;
+  
+  /* Prevent script-based font changes */
+  font-variant-east-asian: normal;
+  font-variant-ligatures: normal;
+}
+
+/* Debug helpers (remove in production) */
+.font-debug {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  font-size: 8pt;
+  color: #999;
+  background: #f0f0f0;
+  padding: 4pt;
+  border: 1px solid #ddd;
+  z-index: 9999;
+}
+
+@media print {
+  .font-debug {
+    display: none;
+  }
+}
+
+/* Emoji and symbol sizing */
+.emoji {
+  font-family: 'Noto Emoji', sans-serif;
+  font-size: 1.1em;
+  vertical-align: middle;
+}
+
+/* Ensure consistent rendering across platforms */
+* {
+  -webkit-font-feature-settings: "liga" 1, "kern" 1;
+  font-feature-settings: "liga" 1, "kern" 1;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+}

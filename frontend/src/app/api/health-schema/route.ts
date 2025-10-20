@@ -1,117 +1,182 @@
 /**
- * Health Check: Home View Schema
+ * Schema Health Check Endpoint
  * 
- * Purpose: Quick diagnostic endpoint to verify column availability
- * Usage: GET /api/health-schema?check=home_view
- * 
- * Returns:
- * - ok: true if view exists and has required columns
- * - viewName: canonical view name
- * - hasWebViewCount: whether web_view_count column exists
- * - version: current home_view_version from system_meta
+ * Verifies expected database views and columns exist
+ * Part of Chromium PDF migration - ensures data contract stability
  */
 
-import { NextResponse, NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { HOME_SCHEMA, HOME_VIEW, HOME_COLUMNS } from '@/lib/db/schema-constants'
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
-function getClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anon) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY')
+// Expected schema for weekly snapshots view
+const EXPECTED_SCHEMA = {
+  public_v_weekly_snapshots: {
+    columns: [
+      'snapshot_id',
+      'status', 
+      'built_at',
+      'created_at',
+      'range_start',
+      'range_end',
+      'items',
+      'meta'
+    ],
+    critical: true
+  },
+  public_v_weekly_stats: {
+    columns: [
+      'week',
+      'news_count',
+      'total_stories',
+      'stories_with_images',
+      'avg_popularity_score',
+      'last_updated'
+    ],
+    critical: false
   }
-  return createClient(url, anon, {
-    auth: { persistSession: false },
-  })
-}
+};
 
-export async function GET(req: NextRequest) {
-  const searchParams = req.nextUrl.searchParams
-  const check = searchParams.get('check') || 'home_view'
-  
-  if (check !== 'home_view') {
-    return NextResponse.json({
-      ok: false,
-      error: `Unknown check: ${check}. Valid: home_view`
-    }, { status: 400 })
-  }
-  
+async function checkViewSchema(supabase: any, viewName: string, expectedColumns: string[]) {
   try {
-    const supabase = getClient()
-    
-    // Use RPC function to check column existence (avoids PostgREST info_schema issues)
-    const { data: hasWebViewCount, error: rpcError } = await supabase.rpc('util_has_column', {
-      view_name: HOME_VIEW,
-      col_name: 'web_view_count'
-    })
-    
-    if (rpcError) {
-      return NextResponse.json({
-        ok: false,
-        viewName: HOME_VIEW,
-        error: 'RPC check failed: ' + rpcError.message,
-        checkedAt: new Date().toISOString()
-      }, { status: 500 })
+    // Query to get column names for a view
+    const { data, error } = await supabase
+      .from(viewName)
+      .select('*')
+      .limit(0); // We only need column info, not data
+
+    if (error) {
+      return {
+        view: viewName,
+        exists: false,
+        error: error.message,
+        columns: []
+      };
     }
-    
-    // Try to get column count via a sample query
-    const { data: sampleData, error: sampleError } = await supabase
-      .from(HOME_VIEW)
+
+    // Get columns from a dummy query
+    const { data: sample, error: sampleError } = await supabase
+      .from(viewName)
       .select('*')
       .limit(1)
-      .single()
-    
-    const columnCount = sampleData ? Object.keys(sampleData).length : 0
-    
-    // Get system meta version
-    const { data: metaData } = await supabase
-      .from('public_v_system_meta' as any)
-      .select('key, value')
-      .in('key', ['home_view_version', 'home_view_canonical'])
-    
-    const version = metaData?.find((m: any) => m.key === 'home_view_version')?.value || 'unknown'
-    const canonical = metaData?.find((m: any) => m.key === 'home_view_canonical')?.value || HOME_VIEW
-    
-    // Determine if view is healthy
-    const ok = columnCount >= 26 && hasWebViewCount
-    
-    return NextResponse.json({
-      ok,
-      viewName: HOME_VIEW,
-      canonicalView: canonical,
-      schema: HOME_SCHEMA,
-      columns: {
-        total: columnCount,
-        expected: HOME_COLUMNS.length,
-        hasWebViewCount: hasWebViewCount === true,
-        sampleKeys: sampleData ? Object.keys(sampleData).slice(0, 10) : []
-      },
-      version,
-      checkedAt: new Date().toISOString(),
-      message: ok 
-        ? 'Schema healthy: all required columns present'
-        : hasWebViewCount 
-          ? 'Schema issue: column count mismatch'
-          : 'Schema issue: web_view_count column missing'
-    }, { 
-      status: ok ? 200 : 503,
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-        'Pragma': 'no-cache'
-      }
-    })
-    
+      .single();
+
+    const actualColumns = sample ? Object.keys(sample) : [];
+    const missingColumns = expectedColumns.filter(col => !actualColumns.includes(col));
+    const extraColumns = actualColumns.filter(col => !expectedColumns.includes(col));
+
+    return {
+      view: viewName,
+      exists: true,
+      error: null,
+      columns: actualColumns,
+      expectedColumns,
+      missingColumns,
+      extraColumns,
+      healthy: missingColumns.length === 0
+    };
   } catch (error: any) {
-    console.error('[health-schema] Error:', error)
+    return {
+      view: viewName,
+      exists: false,
+      error: error.message || 'Unknown error',
+      columns: []
+    };
+  }
+}
+
+export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  
+  try {
+    // Create Supabase client
+    const cookieStore = cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+        },
+      }
+    );
+
+    // Check which specific view to test
+    const url = new URL(request.url);
+    const checkView = url.searchParams.get('check');
+    
+    const results: any = {
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      checks: {}
+    };
+
+    // Check specific view or all
+    const viewsToCheck = checkView 
+      ? { [checkView]: EXPECTED_SCHEMA[checkView as keyof typeof EXPECTED_SCHEMA] }
+      : EXPECTED_SCHEMA;
+
+    for (const [viewName, config] of Object.entries(viewsToCheck)) {
+      if (!config) continue;
+      
+      results.checks[viewName] = await checkViewSchema(
+        supabase, 
+        viewName, 
+        config.columns
+      );
+      results.checks[viewName].critical = config.critical;
+    }
+
+    // Overall health status
+    const criticalViews = Object.entries(results.checks)
+      .filter(([_, check]: [string, any]) => check.critical && !check.healthy);
+    
+    results.healthy = criticalViews.length === 0;
+    results.duration = Date.now() - startTime;
+
+    // Special check for home_view
+    if (checkView === 'home_view') {
+      // Check both canonical and alias
+      const homeViewChecks = await Promise.all([
+        checkViewSchema(supabase, 'home_feed_v1', [
+          'id', 'rank', 'title', 'platform', 'category',
+          'channel', 'published_at', 'popularity_score'
+        ]),
+        checkViewSchema(supabase, 'public_v_home_news', [
+          'id', 'rank', 'title', 'platform', 'category',
+          'channel', 'published_at', 'score'
+        ])
+      ]);
+
+      results.checks = {
+        home_feed_v1: homeViewChecks[0],
+        public_v_home_news: homeViewChecks[1]
+      };
+      results.healthy = homeViewChecks.every(check => check.healthy);
+    }
+
+    return NextResponse.json(results, {
+      status: results.healthy ? 200 : 503,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store'
+      }
+    });
+
+  } catch (error: any) {
     return NextResponse.json({
-      ok: false,
-      viewName: HOME_VIEW,
-      error: error.message || 'Health check failed',
-      checkedAt: new Date().toISOString()
-    }, { status: 500 })
+      timestamp: new Date().toISOString(),
+      healthy: false,
+      error: error.message || 'Unknown error',
+      duration: Date.now() - startTime
+    }, {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store'
+      }
+    });
   }
 }

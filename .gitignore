@@ -317,6 +317,15 @@ test_*
 *_debug.py
 *.test.local
 
+# Test artifacts (generated PDFs, screenshots)
+*.pdf
+test-*.pdf
+fixed*.pdf
+enhanced*.pdf
+*-test.pdf
+screenshots/
+*.png.bak
+
 # Mock data
 mock_*
 *_mock.*
@@ -359,6 +368,11 @@ settings.local.json
 
 # Database execution logs
 scripts/db/logs/
+
+# Audit and security reports (may contain sensitive data)
+reports/repo/*.json
+reports/repo/*.log
+reports/db/*.log
 
 # Monitoring and analytics
 .monitoring/

@@ -4,6 +4,8 @@
   • Views hide sensitive fields (keys/internal logs/score breakdowns). Public JSON outputs are safe.
   • Separation of roles: anon (read public views), service_role (write/update via backend jobs).
   • Column filtering: expose only safe columns (id, title, summary, category, popularity_score, ai_image_url, source platform, source URL, etc.).
+  • **RLS Enabled:** All public tables have Row Level Security enabled with appropriate policies (audit: 2025-10-20)
+  • **Function Security:** All public functions have explicit search_path set to prevent injection attacks (audit: 2025-10-20)
 • Never ship secrets in client, never hardcode keys, never commit secrets. Do not push automatically to GitHub.
 • Public views are the single source of truth for the frontend. If schema changes, add aliases in views to avoid breaking UI.
 • System Meta Access (Updated 2025-09-26):

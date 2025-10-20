@@ -1,0 +1,52 @@
+# Code Owners
+
+# This file defines individuals or teams responsible for code in this repository.
+# Each line is a file pattern followed by one or more owners.
+# Order is important; the last matching pattern takes precedence.
+
+# Default owner for everything in the repo
+# * @your-github-username
+
+# Security & Environment
+/.env* @security-team
+/SECURITY.md @security-team
+/reports/repo/SECURITY_*.md @security-team
+/reports/repo/DB_SECURITY_*.md @security-team
+
+# Database & Migrations
+/frontend/db/sql/** @database-team
+/memory-bank/01_security_plan_b.mb @database-team @security-team
+/memory-bank/02_data_stack_and_schema.mb @database-team
+/reports/db/** @database-team
+
+# Frontend
+/frontend/src/** @frontend-team
+/frontend/src/app/api/** @backend-team @frontend-team
+
+# PDF System
+/frontend/src/app/api/weekly/pdf/** @pdf-team
+/frontend/src/components/pdf/** @pdf-team
+/frontend/src/lib/pdf/** @pdf-team
+/memory-bank/04_pdf_system.mb @pdf-team
+
+# Backend Scripts
+/summarize_*.py @backend-team
+/scripts/** @backend-team
+
+# Configuration
+/frontend/next.config.js @frontend-team @devops-team
+/frontend/tailwind.config.ts @frontend-team
+/.gitignore @devops-team
+/.github/** @devops-team
+
+# Documentation
+/docs/** @documentation-team
+/memory-bank/** @documentation-team @tech-lead
+/README.md @documentation-team
+
+# Memory Bank (requires tech lead approval)
+/memory-bank/**/*.mb @tech-lead
+
+# Security Policies (requires security + tech lead approval)
+/SECURITY.md @security-team @tech-lead
+

@@ -1,0 +1,22 @@
+# Paths to purge from Git history
+# Based on gitleaks_history.json findings (28 leaks across 7 commits)
+
+# Build artifacts (webpack bundles with keys) - PRIMARY TARGET
+frontend/.next/
+
+# Security audit reports (contains GCP API keys)
+security_audit_report.json
+
+# Old/temporary API routes (hardcoded keys)
+frontend/src/app/api/weekly/pdf2/
+
+# Environment setup scripts (contained secrets)
+setup_environment.py
+
+# Documentation with curl/auth examples
+DEV_NOTES_WEEKLY_SNAPSHOT.md
+docs/PLAN_B_DEPLOYMENT_GUIDE.md
+docs/PLAYBOOK2_SECURITY_FIX_RUNBOOK.md
+docs/PLAYBOOK2_VALIDATION_GUIDE.md
+docs/WEEKLY_SNAPSHOT_SYSTEM.md
+
