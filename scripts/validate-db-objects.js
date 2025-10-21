@@ -184,13 +184,28 @@ async function checkHomeNewsColumns() {
       warn('v_home_news columns', 'No data returned, cannot verify columns')
     } else {
       const item = data[0]
-      const requiredFields = ['id', 'title', 'popularity_score', 'published_at']
+      // Critical columns required by frontend (must exist and have correct types)
+      const requiredFields = [
+        'id', 
+        'title', 
+        'popularity_score',           // numeric(6,3) - display score
+        'popularity_score_precise',   // numeric - full precision for sorting
+        'published_at',
+        'summary',
+        'category',
+        'platform'
+      ]
       const missing = requiredFields.filter(f => !(f in item))
       
       if (missing.length > 0) {
         fail('v_home_news columns', `Missing fields: ${missing.join(', ')}`)
       } else {
-        pass('v_home_news columns', `Has required fields: ${requiredFields.join(', ')}`)
+        // Verify popularity_score_precise is a number (not null/string)
+        if (typeof item.popularity_score_precise === 'number' || item.popularity_score_precise === null) {
+          pass('v_home_news columns', `Has required fields including popularity_score_precise (numeric)`)
+        } else {
+          fail('v_home_news columns', `popularity_score_precise has wrong type: ${typeof item.popularity_score_precise}`)
+        }
       }
     }
   } catch (e) {

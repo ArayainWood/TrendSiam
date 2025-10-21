@@ -13,7 +13,8 @@
 | 001 | `001_drop_legacy_views.sql` | Remove old backup views from Sept 27 | ✅ Applied | 2025-10-20 |
 | 002 | `002_enable_rls_demo_seed.sql` | Enable RLS on demo seed table | ✅ Applied | 2025-10-20 |
 | 003 | `003_secure_function_search_paths.sql` | Set secure search_path on RPC functions | ✅ Applied | 2025-10-20 |
-| 004 | `004_create_v_home_news_alias.sql` | Create v_home_news alias view | ⏳ Pending | 2025-10-21 |
+| 004 | `004_create_v_home_news_alias.sql` | Create v_home_news alias view | ✅ Applied | 2025-10-21 |
+| 005 | `005_add_popularity_score_precise.sql` | Add popularity_score_precise to home views | ✅ Applied | 2025-10-21 |
 
 ---
 

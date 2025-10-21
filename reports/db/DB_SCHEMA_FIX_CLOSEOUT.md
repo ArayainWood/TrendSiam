@@ -90,7 +90,7 @@
 
 ## Solution Implemented
 
-### 1. Migration 004: Create Alias View
+### 1. Migration 004: Create Alias View (COMPLETED)
 
 **File:** `frontend/db/sql/migrations/004_create_v_home_news_alias.sql`
 
@@ -122,6 +122,43 @@ COMMENT ON VIEW public.v_home_news IS
 - ✅ Column count verified: 27 columns (includes all home feed fields)
 - ✅ Migration verification passed
 - ✅ Both views exist and accessible by anon role
+
+---
+
+### 2. Migration 005: Add popularity_score_precise (COMPLETED)
+
+**File:** `frontend/db/sql/migrations/005_add_popularity_score_precise.sql`
+
+**Purpose:** Expose `popularity_score_precise` column from `news_trends` base table in both home views
+
+**Problem Discovered (2025-10-21):**
+- Frontend code expects `popularity_score_precise` (full precision numeric for sorting)
+- Views only exposed `popularity_score` (numeric(6,3) for display)
+- Base table `news_trends` has **both columns**, but views weren't exposing the precise one
+- Runtime error: "column v_home_news.popularity_score_precise does not exist"
+
+**Fix Applied:**
+1. **DROP CASCADE** both views (`v_home_news` and `public_v_home_news`)
+   - Note: Also dropped dependent view `home_feed_v1` (acceptable, was deprecated)
+2. **RECREATE** `public_v_home_news` with `popularity_score_precise` added to SELECT list
+3. **RECREATE** `v_home_news` alias to pass through new column
+4. **Set security:** `security_invoker = false` (uses postgres privileges, not anon)
+5. **Grant permissions:** anon/authenticated can SELECT
+
+**Column Contract (28 columns total):**
+- `popularity_score` - numeric(6,3) for display (0-100)
+- `popularity_score_precise` - numeric for sorting (full precision)
+
+**Risk:** MEDIUM - Brief unavailability during DROP/CREATE (within transaction)  
+**Rollback:** Re-run migration 004 or restore from backup
+
+**Applied:** 2025-10-21 via psql  
+**Verification:**
+- ✅ Column count verified: 28 columns in both views
+- ✅ `popularity_score_precise` exists and is numeric type
+- ✅ anon can read both views (Plan-B compliance)
+- ✅ Frontend code validated: all usages now work
+- ✅ Build passed: `npm run build` successful
 
 ### 2. Comprehensive DB Documentation
 
