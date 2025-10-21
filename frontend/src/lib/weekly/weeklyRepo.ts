@@ -58,52 +58,36 @@ export async function fetchLatestWeekly(): Promise<WeeklySnapshot | null> {
   }
   
   try {
-    // Step 1: Try to fetch from view
-    console.log('[weeklyRepo] Trying weekly_report_public_v view...');
-    const { data: viewData, error: viewError } = await supabase
-      .from('weekly_report_public_v')
+    // Use the correct public view: public_v_weekly_snapshots (Plan-B compliant)
+    console.log('[weeklyRepo] Fetching from public_v_weekly_snapshots view...');
+    const { data, error } = await supabase
+      .from('public_v_weekly_snapshots')
       .select(COLS)
       .order('built_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     
-    if (!viewError && viewData) {
-      console.log('[weeklyRepo] Found snapshot in view');
-      try {
-        const validated = WeeklySnap.parse(viewData);
-        return validated;
-      } catch (e) {
-        console.warn('[weeklyRepo] View data validation failed:', e);
-      }
-    } else if (viewError) {
-      console.log('[weeklyRepo] View error (might not exist):', viewError.message);
+    if (error) {
+      console.error('[weeklyRepo] Query error:', error.message);
+      console.error('[weeklyRepo] Error details:', error);
+      return null;
     }
     
-    // Step 2: Fallback to table with status filter
-    console.log('[weeklyRepo] Falling back to weekly_report_snapshots table...');
-    const { data: tableData, error: tableError } = await supabase
-      .from('weekly_report_snapshots')
-      .select(COLS)
-      .eq('status', 'published')
-      .order('built_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (!tableError && tableData) {
-      console.log('[weeklyRepo] Found published snapshot in table');
-      try {
-        const validated = WeeklySnap.parse(tableData);
-        return validated;
-      } catch (e) {
-        console.warn('[weeklyRepo] Table data validation failed:', e);
-      }
-    } else if (tableError) {
-      console.error('[weeklyRepo] Table error:', tableError.message);
+    if (!data) {
+      console.warn('[weeklyRepo] No snapshots found');
+      return null;
     }
     
-    // No snapshots found
-    console.warn('[weeklyRepo] No snapshots found in view or table');
-    return null;
+    console.log('[weeklyRepo] Found snapshot:', data.snapshot_id);
+    
+    // Validate and return
+    try {
+      const validated = WeeklySnap.parse(data);
+      return validated;
+    } catch (e) {
+      console.error('[weeklyRepo] Data validation failed:', e);
+      return null;
+    }
     
   } catch (error) {
     console.error('[weeklyRepo] Unexpected error:', error);
@@ -143,42 +127,27 @@ export async function getDiagnosticCounts() {
   
   const results = {
     viewCount: 0,
-    tablePublishedCount: 0,
-    tableTotalCount: 0
+    viewPublishedCount: 0
   };
   
   try {
-    // Count from view
-    const { count: viewCount } = await supabase
-      .from('weekly_report_public_v')
+    // Count total from public view
+    const { count: totalCount } = await supabase
+      .from('public_v_weekly_snapshots')
       .select('*', { count: 'exact', head: true });
     
-    results.viewCount = viewCount || 0;
-  } catch (e) {
-    // View might not exist
-  }
-  
-  try {
-    // Count published from table
+    results.viewCount = totalCount || 0;
+    
+    // Count published (status='published' already filtered by view)
     const { count: publishedCount } = await supabase
-      .from('weekly_report_snapshots')
+      .from('public_v_weekly_snapshots')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'published');
     
-    results.tablePublishedCount = publishedCount || 0;
-  } catch (e) {
-    console.error('[weeklyRepo] Error counting published:', e);
-  }
-  
-  try {
-    // Total count from table
-    const { count: totalCount } = await supabase
-      .from('weekly_report_snapshots')
-      .select('*', { count: 'exact', head: true });
+    results.viewPublishedCount = publishedCount || 0;
     
-    results.tableTotalCount = totalCount || 0;
   } catch (e) {
-    console.error('[weeklyRepo] Error counting total:', e);
+    console.error('[weeklyRepo] Error getting counts:', e);
   }
   
   return results;
@@ -194,50 +163,35 @@ export async function fetchDiagnosticData() {
   
   const diagnostics: any = {
     latestFromView: null,
-    latestPublishedFromTable: null
+    totalCount: 0,
+    publishedCount: 0
   };
   
   try {
-    // Latest from view
-    const { data: viewData } = await supabase
-      .from('weekly_report_public_v')
+    // Get counts
+    const counts = await getDiagnosticCounts();
+    diagnostics.totalCount = counts.viewCount;
+    diagnostics.publishedCount = counts.viewPublishedCount;
+    
+    // Latest snapshot from public view
+    const { data } = await supabase
+      .from('public_v_weekly_snapshots')
       .select(COLS)
       .order('built_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     
-    if (viewData) {
+    if (data) {
       diagnostics.latestFromView = {
-        snapshot_id: viewData.snapshot_id,
-        status: viewData.status,
-        built_at: viewData.built_at,
-        item_count: countTotalStories(viewData)
+        snapshot_id: data.snapshot_id,
+        status: data.status,
+        built_at: data.built_at,
+        item_count: countTotalStories(data)
       };
     }
-  } catch (e) {
-    // View might not exist
-  }
-  
-  try {
-    // Latest published from table
-    const { data: tableData } = await supabase
-      .from('weekly_report_snapshots')
-      .select(COLS)
-      .eq('status', 'published')
-      .order('built_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
     
-    if (tableData) {
-      diagnostics.latestPublishedFromTable = {
-        snapshot_id: tableData.snapshot_id,
-        status: tableData.status,
-        built_at: tableData.built_at,
-        item_count: countTotalStories(tableData)
-      };
-    }
   } catch (e) {
-    console.error('[weeklyRepo] Error fetching table data:', e);
+    console.error('[weeklyRepo] Error fetching diagnostic data:', e);
   }
   
   return diagnostics;

@@ -226,7 +226,7 @@ jobs:
         working-directory: frontend
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || '' }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || '' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || '' }}
         run: |
           if [ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
             node ../scripts/validate-db-objects.js

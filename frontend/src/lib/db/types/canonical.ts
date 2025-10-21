@@ -30,35 +30,46 @@ export const DbNewsRowSchema = z.object({
   // Dates
   date: z.string().nullable(),
   published_date: z.string().nullable(),
-  created_at: z.string(),
+  published_at: z.string().nullable(),
+  snapshot_date: z.string().nullable(),
+  created_at: z.string().nullable().optional(),
   updated_at: z.string(),
-  summary_date: z.string().nullable(),
+  summary_date: z.string().nullable().optional(),
   
-  // Metrics - stored as strings in DB
-  view_count: z.union([z.string(), z.number()]).nullable(),
-  like_count: z.union([z.string(), z.number()]).nullable(),
-  comment_count: z.union([z.string(), z.number()]).nullable(),
-  duration: z.string().nullable(),
-  raw_view: z.string().nullable(),
+  // Metrics - v_home_news returns these specific names
+  video_views: z.union([z.string(), z.number()]).nullable().optional(), // View column name
+  view_count: z.union([z.string(), z.number()]).nullable().optional(), // Legacy name
+  likes: z.union([z.string(), z.number()]).nullable().optional(), // View column name
+  like_count: z.union([z.string(), z.number()]).nullable().optional(), // Legacy name
+  comments: z.union([z.string(), z.number()]).nullable().optional(), // View column name
+  comment_count: z.union([z.string(), z.number()]).nullable().optional(), // Legacy name
+  duration: z.string().nullable().optional(),
+  raw_view: z.string().nullable().optional(),
   
   // Scores
   popularity_score: z.union([z.number(), z.string()]).nullable(),
   popularity_score_precise: z.union([z.number(), z.string()]),
   
-  // AI & Image fields
-  ai_image_url: z.string().nullable(),
-  ai_image_prompt: z.string().nullable(),
+  // AI & Image fields - v_home_news specific
+  ai_generated_image: z.string().nullable().optional(), // View column for AI images
+  platform_thumbnail: z.string().nullable().optional(), // View column for platform images
+  ai_image_url: z.string().nullable().optional(), // Legacy name
+  ai_prompt: z.string().nullable().optional(), // View column name
+  ai_image_prompt: z.string().nullable().optional(), // Legacy name
+  source_url: z.string().nullable().optional(),
   
   // Analysis fields
-  reason: z.string().nullable(),
-  growth_rate: z.string().nullable(),
+  reason: z.string().nullable().optional(),
+  growth_rate: z.union([z.string(), z.number()]).nullable().optional(), // Legacy name
+  growth_rate_value: z.union([z.string(), z.number()]).nullable().optional(), // View column name
+  growth_rate_label: z.string().nullable().optional(), // View column name
   platform_mentions: z.string().nullable(),
   keywords: z.string().nullable(),
   ai_opinion: z.string().nullable().optional(), // Removed from secure views
   score_details: z.string().nullable().optional(), // Removed from secure views
   
   // Platform fields (from fallback chain)
-  platforms_raw: z.string().nullable(),
+  platforms_raw: z.string().nullable().optional(),
   
   // Snapshot fields (when joined)
   rank: z.union([z.number(), z.string()]).optional(),
@@ -227,10 +238,16 @@ function getPopularitySubtext(row: DbNewsRow): string {
  * Determine display image URL with fallback chain
  */
 function getDisplayImageUrl(row: DbNewsRow): string {
-  // Try snapshot image first
+  // Try AI generated image first
+  if (row.ai_generated_image) return row.ai_generated_image;
+  
+  // Then platform thumbnail
+  if (row.platform_thumbnail) return row.platform_thumbnail;
+  
+  // Then snapshot image
   if (row.image_url) return row.image_url;
   
-  // Then AI image
+  // Then legacy AI image field
   if (row.ai_image_url) return row.ai_image_url;
   
   // Then raw display URL from view
@@ -248,7 +265,11 @@ export function mapDbToUi(row: DbNewsRow): UiNewsItem {
   const popularityScore = toNumber(row.popularity_score_precise || row.popularity_score, 0);
   const displayImageUrl = getDisplayImageUrl(row);
   const hasRealImage = displayImageUrl !== PLACEHOLDER_IMAGE;
-  const isAIImage = Boolean(row.is_ai_image) || displayImageUrl === row.ai_image_url;
+  
+  // Determine if image is AI-generated
+  const isAIImage = Boolean(row.is_ai_image) || 
+                    displayImageUrl === row.ai_generated_image ||
+                    displayImageUrl === row.ai_image_url;
   
   return {
     // Core identifiers
@@ -260,23 +281,23 @@ export function mapDbToUi(row: DbNewsRow): UiNewsItem {
     title: row.title,
     summary: row.summary,
     summaryEn: row.summary_en,
-    description: row.description,
+    description: row.description || null,
     category: row.category,
     platform: row.platform,
     channelTitle: row.channel,
     
     // Dates
-    publishedAt: row.published_date,
-    createdAt: row.created_at,
+    publishedAt: row.published_at || row.published_date || null,
+    createdAt: row.created_at || row.updated_at,
     updatedAt: row.updated_at,
-    summaryDate: row.summary_date || row.date,
+    summaryDate: row.summary_date || row.date || row.snapshot_date || null,
     
-    // Metrics
-    views: toNumber(row.view_count, 0),
-    likes: toNumber(row.like_count, 0),
-    comments: toNumber(row.comment_count, 0),
-    duration: row.duration,
-    rawView: row.raw_view,
+    // Metrics - with fallback to both old and new column names
+    views: toNumber(row.video_views || row.view_count, 0),
+    likes: toNumber(row.likes || row.like_count, 0),
+    comments: toNumber(row.comments || row.comment_count, 0),
+    duration: row.duration || null,
+    rawView: row.raw_view || null,
     
     // Scores
     popularityScore: Math.round(popularityScore),
@@ -285,11 +306,11 @@ export function mapDbToUi(row: DbNewsRow): UiNewsItem {
     // Image fields
     displayImageUrl,
     isAIImage,
-    aiImagePrompt: row.ai_image_prompt,
+    aiImagePrompt: row.ai_prompt || row.ai_image_prompt || null,
     
     // Analysis fields
-    reason: row.reason,
-    growthRate: row.growth_rate ? toNumber(row.growth_rate) : null,
+    reason: row.reason || null,
+    growthRate: toNumber(row.growth_rate_value || row.growth_rate),
     platformMentions: row.platform_mentions,
     platforms: extractPlatformsFromRow(row),
     keywords: parseKeywords(row.keywords),
@@ -321,14 +342,14 @@ export function legacyUiCompat(item: UiNewsItem): UiNewsItem {
     comment_count: item.comments,
     popularity_score: item.popularityScore,
     popularity_score_precise: item.popularityScorePrecise,
-    ai_image_url: item.isAIImage ? item.displayImageUrl : null,
-    growth_rate: item.growthRate ? item.growthRate.toString() : null,
+    ai_image_url: item.displayImageUrl, // Always provide the display URL
+    growth_rate: item.growthRate || null,
     auto_category: item.category,
     ai_image_prompt: item.aiImagePrompt,
     ai_opinion: item.aiOpinion,
     score_details: item.scoreDetails,
     view_details: {
-      views: item.views.toString(),
+      views: item.views?.toString() || '0',
       growth_rate: item.growthRate?.toString() || '0',
       platform_mentions: item.platformMentions || '0',
       matched_keywords: item.keywords.join(', '),
