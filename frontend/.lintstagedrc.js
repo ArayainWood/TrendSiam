@@ -3,8 +3,8 @@
 
 module.exports = {
   '**/*.{js,jsx,ts,tsx}': [
-    'eslint --fix',
-    'git add'
+    'eslint --fix'
+    // Note: 'git add' is deprecated - lint-staged auto-adds fixed files
   ]
 };
 
