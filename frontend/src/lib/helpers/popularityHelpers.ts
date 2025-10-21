@@ -28,7 +28,7 @@ export function getPopularitySubtext(item: UINewsItem): string {
   // Otherwise compute it from the item's metrics
   const views = item.views || 0;
   const likes = item.likes || 0;
-  const growthRate = item.growthRateValue;
+  const growthRate = item.growthRate;
   
   // Engagement level first (based on like rate)
   if (views > 0 && likes > 0) {

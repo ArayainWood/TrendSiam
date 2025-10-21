@@ -1,9 +1,3 @@
-/*
- * PHASE 1 HOTFIX COMPLETE: Fixed filteredNews crash
- * - Removed undefined filteredNews reference from useEffect dependency array (line 247)
- * - Added runtime guards for displayNews array safety
- * - Ensured Top-3 logic uses proper array bounds checking
- */
 'use client'
 
 import { useEffect, useState } from 'react'
@@ -30,12 +24,13 @@ import { ImageDebugger } from '../components/debug/ImageDebugger'
 
 
 // New hero section inspired by big.dk
-function HeroSection({ onViewDetails, displayItems }: { onViewDetails?: (story: UINewsItem) => void, displayItems: UINewsItem[] }) {
+function HeroSection({ onViewDetails }: { onViewDetails?: (story: UINewsItem) => void }) {
+  const { news } = useNewsStore()
   const { language } = useUIStore()
   
-  // Safety check for news array - robust handling
-  const newsList = Array.isArray(displayItems) ? displayItems : []
-  const topStory = newsList.length > 0 ? newsList[0] : null
+  // Safety check for news array
+  const newsList = Array.isArray(news) ? news : []
+  const topStory = newsList[0]
   
   return (
     <section className="min-h-screen flex items-center justify-center bg-white dark:bg-void-950 relative overflow-hidden">
@@ -109,33 +104,51 @@ function HeroSection({ onViewDetails, displayItems }: { onViewDetails?: (story: 
                   </div>
                 </div>
                 
-                {/* PHASE 3: Hero Image - unified with API logic */}
-                {topStory.showImage && topStory.imageUrl && (
-                  <div className="image-reveal mb-6 relative">
-                    <img 
-                      src={topStory.imageUrl}
-                      alt={`AI-generated illustration for: ${topStory.title}`}
-                      className="w-full h-48 object-cover rounded-lg"
-                      onError={(e) => {
-                        console.error(`🖼️ HERO AI IMAGE LOAD FAILED:`, {
-                          imageUrl: topStory.imageUrl,
-                          title: topStory.title?.substring(0, 40) + '...',
-                          storyId: topStory.id
-                        })
-                        // PHASE 3: Hide broken images instead of showing placeholder
-                        e.currentTarget.style.display = 'none'
-                        e.currentTarget.parentElement?.remove()
-                      }}
-                    />
-                    
-                    {/* AI-Generated Badge - Always show for hero images */}
-                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-lg backdrop-blur-sm border border-white/20">
-                      <span className="flex items-center gap-1">
-                        🤖 <span className="font-medium">AI-Generated</span>
-                      </span>
+                {/* AI-Generated Image */}
+                {(() => {
+                  const heroIsTop3 = isTop3(topStory, 0) // Hero is always the #1 story
+                  const heroImageSelection = selectCardImage(topStory, { isTop3: heroIsTop3 })
+                  
+                  // Debug logging (temporary)
+                  debugImageSelection(topStory, 0, 'Hero', heroImageSelection)
+                  
+                  return (
+                    <div className="image-reveal mb-6 relative">
+                      {heroImageSelection.isAI && heroImageSelection.hasImage ? (
+                        <img 
+                          src={heroImageSelection.src}
+                          alt={`AI-generated illustration for: ${topStory.title}`}
+                          className="w-full h-48 object-cover rounded-lg"
+                          onError={(e) => {
+                            console.error(`🖼️ HERO AI IMAGE LOAD FAILED:`, {
+                              ai_image_url: topStory.ai_image_url,
+                              title: topStory.title?.substring(0, 40) + '...',
+                              resolved_url: heroImageSelection.src
+                            })
+                            // Fallback to placeholder
+                            e.currentTarget.src = PLACEHOLDER_IMAGE_URL
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-48 bg-gradient-to-br from-concrete-100 to-concrete-200 dark:from-void-800 dark:to-void-700 rounded-lg flex items-center justify-center">
+                          <div className="text-center text-concrete-500 dark:text-concrete-400">
+                            <div className="text-2xl mb-2">🎨</div>
+                            <div className="text-sm">AI Image Generating...</div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* AI-Generated Badge - Only show when actually showing AI image */}
+                      {heroImageSelection.isAI && heroImageSelection.hasImage && (
+                        <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-lg backdrop-blur-sm border border-white/20">
+                          <span className="flex items-center gap-1">
+                            🤖 <span className="font-medium">AI-Generated</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
                 
                 {/* Story content */}
                 <div className="space-y-4">
@@ -143,21 +156,19 @@ function HeroSection({ onViewDetails, displayItems }: { onViewDetails?: (story: 
                     {topStory.title}
                   </h3>
                   <p className="text-concrete-600 dark:text-concrete-400 line-clamp-3">
-                    {language.code === 'th' 
-                      ? (topStory.summary || topStory.summaryEn)
-                      : (topStory.summaryEn || topStory.summary_en || topStory.summary)}
+                    {language.code === 'th' ? topStory.summary : (topStory.summary_en || topStory.summary)}
                   </p>
                   
-                  {/* Popularity score with visual indicator - FIXED: use camelCase */}
+                  {/* Popularity score with visual indicator */}
                   <div className="flex items-center gap-3 pt-4 border-t border-concrete-200 dark:border-void-800">
                     <div className="flex-1 bg-concrete-200 dark:bg-void-800 h-1 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-accent-500 to-thai-400 rounded-full transition-all duration-1000"
-                        style={{ width: `${Math.min(Number(topStory.popularityScore || topStory.popularity_score) || 0, 100)}%` }}
+                        style={{ width: `${Math.min(topStory.popularity_score || 0, 100)}%` }}
                       />
                     </div>
                     <span className="font-mono text-sm font-medium text-concrete-900 dark:text-white">
-                      {(Number(topStory.popularityScore || topStory.popularity_score) || 0).toFixed(1)}
+                      {Math.round(topStory.popularity_score_precise || topStory.popularity_score || 0)}
                     </span>
                   </div>
                 </div>
@@ -178,11 +189,12 @@ function HeroSection({ onViewDetails, displayItems }: { onViewDetails?: (story: 
 }
 
 // News grid with Tadao Ando inspired precision
-function NewsGrid({ onViewDetails, displayItems }: { onViewDetails: (story: UINewsItem) => void, displayItems: UINewsItem[] }) {
+function NewsGrid({ onViewDetails }: { onViewDetails: (story: UINewsItem) => void }) {
+  const { filteredNews } = useNewsStore()
   const { language } = useUIStore()
   
-  // Display ALL items (no artificial limits) with robust safety check
-  const displayNews = Array.isArray(displayItems) ? displayItems : []
+  // Display ALL items (no artificial limits) with safety check
+  const displayNews = Array.isArray(filteredNews) ? filteredNews : []
   
   // Homepage debug logging - VERIFICATION FOR TODAY'S DATA ONLY
   useEffect(() => {
@@ -199,8 +211,8 @@ function NewsGrid({ onViewDetails, displayItems }: { onViewDetails: (story: UINe
       // Verify ordering
       console.log(`🏆 Top 5 Items (verify ordering):`)
       displayNews.slice(0, 5).forEach((item, idx) => {
-        const rank = item.rank ?? (idx + 1)
-        const score = Number(item.popularity_score_precise || item.popularity_score) || 0
+        const rank = item.rank || (idx + 1)
+        const score = item.popularity_score_precise || item.popularity_score || 0
         const views = item.view_count || '0'
         const date = item.published_date ? new Date(item.published_date).toISOString() : 'No date'
         console.log(`   #${rank}: Score=${score.toFixed(3)}, Views=${views}, Published=${date}, Title="${item.title.substring(0, 30)}..."`)
@@ -234,7 +246,7 @@ function NewsGrid({ onViewDetails, displayItems }: { onViewDetails: (story: UINe
       
       console.log(`🎨 AI Images for Top 3: ${displayNews.slice(0, 3).filter(item => item.ai_image_url).length}/3`)
     }
-  }, [displayNews.length])
+  }, [displayNews, filteredNews.length])
   
   if (displayNews.length === 0) {
     return (
@@ -273,58 +285,49 @@ function NewsGrid({ onViewDetails, displayItems }: { onViewDetails: (story: UINe
         
         {/* Masonry grid for dynamic layout */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {Array.isArray(displayNews) ? displayNews.map((story, index) => (
+          {displayNews.map((story, index) => (
             <NewsCard 
               key={story?.video_id || story?.id || `news-${index}`} 
               story={story} 
               index={index} 
               onViewDetails={onViewDetails}
             />
-          )) : null}
+          ))}
         </div>
         
-        {/* PHASE 6: Enhanced debug info for development */}
+        {/* Debug info for development */}
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-8 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-sm font-mono">
-            <div className="font-bold text-blue-600 dark:text-blue-400 mb-2">🔧 PHASE 6 UI Verification</div>
-            
             <div className="text-gray-600 dark:text-gray-400">
-              📊 Total Items: {displayNews.length} (from public_v_home_news)
+              📊 Homepage: {displayNews.length} stories from TODAY only (Asia/Bangkok)
+            </div>
+            <div className="text-gray-600 dark:text-gray-400 mt-2">
+              📅 Batch Date: {displayNews[0]?.date || displayNews[0]?.summaryDate || 'N/A'}
             </div>
             <div className="text-gray-600 dark:text-gray-400 mt-1">
-              🏆 Top-3 Items: {displayNews.filter((item, idx) => (item as any).isTop3 || (item as any).is_top3 || idx < 3).length} (server-computed)
+              🏆 Top 3 AI Images: {displayNews.slice(0, 3).filter(item => item.ai_image_url).length}/3 available
             </div>
             <div className="text-gray-600 dark:text-gray-400 mt-1">
-              🖼️ Images Shown: {displayNews.filter(item => item.showImage).length} (Top-3 only policy)
+              🎨 Detailed Image Status: {displayNews.slice(0, 3).map((item, idx) => {
+                const hasImage = item.ai_image_url ? '✅' : '❌'
+                const rank = item.rank || (idx + 1)
+                return `#${rank}:${hasImage}`
+              }).join(' | ')}
             </div>
             <div className="text-gray-600 dark:text-gray-400 mt-1">
-              📝 Prompts Available: {displayNews.filter(item => item.showAiPrompt).length} (Top-3 only policy)
+              📝 AI Prompts: {displayNews.slice(0, 3).filter(item => item.ai_image_prompt).length}/3 available
             </div>
             <div className="text-gray-600 dark:text-gray-400 mt-1">
-              📈 Growth Rates: {displayNews.filter(item => {
-                const label = (item as any).growth_rate_label || (item as any).growthRateLabel;
-                return label && label !== 'Not enough data';
-              }).length}/{displayNews.length} computed
-            </div>
-            
-            <div className="text-gray-600 dark:text-gray-400 mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
-              🎨 Top-3 Image Status: {Array.isArray(displayNews) ? displayNews.slice(0, 3).map((item, idx) => {
-                const rank = item?.rank ?? (idx + 1)
-                const hasImage = item?.showImage ? '✅' : '❌'
-                const hasPrompt = item?.showAiPrompt ? '📝' : '❌'
-                return `#${rank}:${hasImage}${hasPrompt}`
-              }).join(' | ') : 'No data'}
-            </div>
-            
-            <div className="text-gray-600 dark:text-gray-400 mt-1">
-              📡 Data Source: public_v_home_news view (PHASE 4 enhanced)
+              📈 Query: WHERE date = TODAY ORDER BY popularity_score_precise DESC, view_count DESC, published_at DESC, title ASC LIMIT 20
             </div>
             <div className="text-gray-600 dark:text-gray-400 mt-1">
-              🔍 Policy Compliance: {(() => {
-                const nonTop3WithImages = displayNews.filter(item => !item.isTop3 && item.showImage).length
-                const nonTop3WithPrompts = displayNews.filter(item => !item.isTop3 && item.showAiPrompt).length
-                return nonTop3WithImages === 0 && nonTop3WithPrompts === 0 ? '✅ PASS' : '❌ VIOLATION'
-              })()}
+              🔍 Top 3 Ranks: {displayNews.slice(0, 3).map((item, idx) => `#${item.rank || (idx + 1)}`).join(', ')}
+            </div>
+            <div className="text-gray-600 dark:text-gray-400 mt-1">
+              🎯 Logic: Today's batch only (no 7/30/60-day windows)
+            </div>
+            <div className="text-gray-600 dark:text-gray-400 mt-1">
+              📡 Data Source: Supabase direct query (no weekly_public_view)
             </div>
           </div>
         )}
@@ -336,69 +339,31 @@ function NewsGrid({ onViewDetails, displayItems }: { onViewDetails: (story: UINe
 // Individual news card with minimalist design
 function NewsCard({ story, index, onViewDetails }: { story: any, index: number, onViewDetails: (story: any) => void }) {
   const { language } = useUIStore()
-  // Use database web view count from API data (persistent site tracking via telemetry)
-  // webViewCount comes from news_trends.view_count, tracked via /api/telemetry/view
-  const webViews = story.webViewCount ?? 0
+  const [internalViews, setInternalViews] = useState(0)
+  // CRITICAL: Use story.rank (from backend) not index for top 3 detection
+  const actualRank = story.rank || (index + 1)
+  const storyIsTop3 = isTop3(story, index)
+  const imageSelection = selectCardImage(story, { isTop3: storyIsTop3 })
   
-  // PHASE 3: Use server-side computed flags (single source of truth)
-  const actualRank = story.rank ?? (index + 1)
-  const storyIsTop3 = story.isTop3 === true
-  const shouldShowImage = story.showImage === true
-  const imageUrl = story.imageUrl
-  
-  // PHASE 3: Runtime assert for policy compliance (dev only)
-  if (process.env.NODE_ENV === 'development') {
-    if (!storyIsTop3 && shouldShowImage) {
-      console.warn(`[PHASE 3] ❌ POLICY VIOLATION: Non-Top3 item (rank ${actualRank}) has showImage=true`, story)
-    }
-  }
-  
-  // Track view on card click (once per session per story)
-  const handleCardClick = () => {
-    // Use camelCase property names from normalized story object
-    const videoId = story.videoId || story.externalId || story.id
-    const sessionKey = `card_view_${videoId}`
-    const lastTracked = typeof window !== 'undefined' ? window.sessionStorage.getItem(sessionKey) : null
-    
-    if (!lastTracked) {
-      const payload = {
-        story_id: story.id,
-        video_id: videoId
-      }
-      
-      // Fire tracking async (don't block modal opening)
-      fetch('/api/telemetry/view', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+  // Debug logging (temporary)
+  debugImageSelection(story, index, 'HomePage-NewsCard', imageSelection)
+
+  // Load internal views when component mounts
+  useEffect(() => {
+    if (story?.video_id) {
+      newsApi.getNewsViews(story.video_id).then((views: number) => {
+        setInternalViews(views)
+      }).catch((error: unknown) => {
+        // Failed to load view count - using fallback
+        setInternalViews(0)
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            console.log('[card] ✅ View tracked on click:', { videoId, storyId: story.id, newCount: data.views })
-            // Mark as tracked with timestamp
-            if (typeof window !== 'undefined') {
-              window.sessionStorage.setItem(sessionKey, Date.now().toString())
-            }
-          } else {
-            console.warn('[card] ❌ Tracking failed:', data.error)
-          }
-        })
-        .catch(err => {
-          console.warn('[card] ❌ Network error:', err.message)
-        })
-    } else {
-      console.log('[card] ⏭️ View already tracked this session:', videoId)
     }
-    
-    // Open modal (don't wait for tracking)
-    onViewDetails(story)
-  }
+  }, [story?.video_id])
   
   return (
     <article 
       className={`news-card p-6 relative overflow-hidden cursor-pointer ${storyIsTop3 ? 'ring-2 ring-accent-500/20' : ''}`}
-      onClick={handleCardClick}
+      onClick={() => onViewDetails(story)}
     >
       {/* Top 3 indicator */}
       {storyIsTop3 && (
@@ -407,32 +372,42 @@ function NewsCard({ story, index, onViewDetails }: { story: any, index: number, 
         </div>
       )}
       
-      {/* PHASE 3: Image rendering - only for Top-3 with valid images, no placeholders */}
-      {shouldShowImage && imageUrl && (
+      {/* AI-Generated Image (only for top 3 stories) */}
+      {storyIsTop3 && (
         <div className="image-reveal mb-6 -mx-6 -mt-6 relative">
-          <img 
-            src={imageUrl}
-            alt={`AI-generated illustration for: ${story.title}`}
-            className="w-full h-48 object-cover"
-            onError={(e) => {
-              console.error(`🖼️ AI IMAGE LOAD FAILED for rank #${actualRank}:`, {
-                imageUrl: imageUrl,
-                title: story.title?.substring(0, 40) + '...',
-                rank: actualRank,
-                storyId: story.id
-              })
-              // PHASE 3: Hide broken images instead of showing placeholder
-              e.currentTarget.style.display = 'none'
-              e.currentTarget.parentElement?.remove()
-            }}
-          />
+          {imageSelection.isAI && imageSelection.hasImage ? (
+            <img 
+              src={imageSelection.src}
+              alt={`AI-generated illustration for: ${story.title}`}
+              className="w-full h-48 object-cover"
+              onError={(e) => {
+                console.error(`🖼️ AI IMAGE LOAD FAILED for rank #${actualRank}:`, {
+                  ai_image_url: story.ai_image_url,
+                  title: story.title?.substring(0, 40) + '...',
+                  rank: actualRank,
+                  resolved_url: imageSelection.src
+                })
+                // Fallback to placeholder
+                e.currentTarget.src = PLACEHOLDER_IMAGE_URL
+              }}
+            />
+          ) : (
+            <div className="w-full h-48 bg-gradient-to-br from-concrete-100 to-concrete-200 dark:from-void-800 dark:to-void-700 flex items-center justify-center">
+              <div className="text-center text-concrete-500 dark:text-concrete-400">
+                <div className="text-xl mb-1">🎨</div>
+                <div className="text-xs">AI Image Generating...</div>
+              </div>
+            </div>
+          )}
           
-          {/* AI-Generated Badge - Always show for Top-3 images */}
-          <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-full backdrop-blur-sm border border-white/20">
-            <span className="flex items-center gap-1">
-              🤖 <span className="font-medium">AI-Generated</span>
-            </span>
-          </div>
+          {/* AI-Generated Badge - Only show when actually showing AI image */}
+          {imageSelection.isAI && imageSelection.hasImage && (
+            <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-full backdrop-blur-sm border border-white/20">
+              <span className="flex items-center gap-1">
+                🤖 <span className="font-medium">AI-Generated</span>
+              </span>
+            </div>
+          )}
         </div>
       )}
       
@@ -453,11 +428,9 @@ function NewsCard({ story, index, onViewDetails }: { story: any, index: number, 
           {story.title}
         </h3>
         
-        {/* Summary - Language-aware (toggles based on language setting) */}
+        {/* Summary */}
         <p className="text-concrete-600 dark:text-concrete-400 line-clamp-4">
-          {language.code === 'en' 
-            ? (story.summaryEn || story.summary_en || story.summary || 'N/A')
-            : (story.summary || story.summaryEn || story.summary_en || 'N/A')}
+          {language.code === 'th' ? story.summary : story.summary_en}
         </p>
         
         {/* Popularity Subtext */}
@@ -468,8 +441,8 @@ function NewsCard({ story, index, onViewDetails }: { story: any, index: number, 
         {/* Footer with metrics */}
         <div className="flex items-center justify-between pt-4 border-t border-concrete-200 dark:border-void-800">
           <div className="flex items-center gap-4 text-sm text-concrete-500 dark:text-concrete-500">
-            <span className="flex items-center gap-1" title={`${webViews.toLocaleString()} site ${webViews === 1 ? 'view' : 'views'}`}>
-              👁 {language.code === 'th' ? `${webViews.toLocaleString()} ครั้ง` : (webViews === 1 ? '1 view' : `${webViews.toLocaleString()} views`)}
+            <span className="flex items-center gap-1">
+              👁 {internalViews > 0 ? `${internalViews.toLocaleString()} ${internalViews === 1 ? 'view' : 'views'}` : '0 views'}
             </span>
           </div>
           
@@ -478,11 +451,11 @@ function NewsCard({ story, index, onViewDetails }: { story: any, index: number, 
             <div className="w-12 h-1 bg-concrete-200 dark:bg-void-800 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-accent-500 rounded-full transition-all duration-1000"
-                style={{ width: `${Math.min(Number(story.popularityScore || story.popularity_score) || 0, 100)}%` }}
+                style={{ width: `${Math.min(story.popularity_score || 0, 100)}%` }}
               />
             </div>
             <span className="font-mono text-sm font-medium text-concrete-900 dark:text-white">
-              {formatPopularityScore(story.popularityScore || story.popularity_score || 0)}
+              {formatPopularityScore(story.popularity_score_precise || story.popularity_score || 0)}
             </span>
           </div>
         </div>
@@ -493,12 +466,9 @@ function NewsCard({ story, index, onViewDetails }: { story: any, index: number, 
 
 // Main page component  
 export default function HomePage() {
-  const { renderList, news, loading, error, fetchNews, startAutoRefresh, stopAutoRefresh } = useNewsStore()
+  const { news, loading, error, fetchNews, startAutoRefresh, stopAutoRefresh } = useNewsStore()
   const { developerMode } = useUIStore()
   const [selectedNews, setSelectedNews] = useState<UINewsItem | null>(null)
-  
-  // Use renderList as primary source, fallback to news for legacy compatibility
-  const displayItems = Array.isArray(renderList) && renderList.length > 0 ? renderList : Array.isArray(news) ? news : []
 
   // Check if Supabase environment variables are configured
   const supabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -531,44 +501,25 @@ export default function HomePage() {
     }
   }, [fetchNews, supabaseConfigured, startAutoRefresh, stopAutoRefresh]) // SECTION F: Include auto-refresh functions
   
-  // PHASE 4: Comprehensive verification logging with type safety
+  // Comprehensive verification logging
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_DEBUG_UI === '1') {
       console.log('[diag] home props/items len', news?.length, news?.[0]);
     }
     
-    if (!loading && Array.isArray(displayItems) && displayItems.length > 0) {
-      // PHASE 4: Runtime type validation (dev only)
-      if (process.env.NODE_ENV === 'development') {
-        for (const item of displayItems) {
-          console.assert(typeof item.rank === 'number' || item.rank === undefined, 'rank must be number', item);
-          console.assert(typeof item.popularity_score !== 'string', 'popularity_score must not be string', item);
-          console.assert(typeof item.popularityScore !== 'string', 'popularityScore must not be string', item);
-          console.assert(!(!(item as any).isTop3 && (item as any).image_url), 'non-Top3 must not have image_url', item);
-          console.assert((item as any).isTop3 || !(item as any).ai_prompt, 'non-Top3 must not expose ai_prompt', item);
-          
-          // Check for text values in numeric fields
-          if (typeof item.views === 'string' && item.views !== '0') {
-            console.warn('⚠️ PHASE 4: views field is string:', item.views, 'for item:', item.id);
-          }
-          if (typeof item.likes === 'string' && item.likes !== '0') {
-            console.warn('⚠️ PHASE 4: likes field is string:', item.likes, 'for item:', item.id);
-          }
-        }
-      }
-      
-      const topStory = displayItems[0]
-      const top3WithImages = displayItems.slice(0, 3).filter(item => item?.ai_image_url).length
+    if (!loading && Array.isArray(news) && news.length > 0) {
+      const topStory = news[0]
+      const top3WithImages = news.slice(0, 3).filter(item => item?.ai_image_url).length
       
       console.log('HOME VERIFY', {
-        items: displayItems.length,
+        items: news.length,
         sorted: 'OK', // Assuming server-side sorting is correct
         dateCheck: 'OK', // Assuming server-side filtering is correct
         topStoryId: topStory?.video_id || topStory?.id || 'missing',
-        top3WithImages: displayItems.slice(0, 3).map(item => item?.video_id || item?.id || 'missing')
+        top3WithImages: news.slice(0, 3).map(item => item?.video_id || item?.id || 'missing')
       })
     }
-  }, [displayItems, loading])
+  }, [news, loading])
 
   if (loading) {
     return (
@@ -640,9 +591,9 @@ export default function HomePage() {
           )}
           
           {/* Data source indicator */}
-          {supabaseConfigured && displayItems.length > 0 && !error && (
+          {supabaseConfigured && news.length > 0 && !error && (
             <div className="fixed top-4 left-4 z-50 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-mono font-medium">
-              📊 LIVE: Today's batch only (Asia/Bangkok) - Top {displayItems.length}
+              📊 LIVE: Today's batch only (Asia/Bangkok) - Top {news.length}
             </div>
           )}
           
@@ -653,19 +604,10 @@ export default function HomePage() {
             </div>
           )}
           
-          {/* PHASE 6: Dev banner with verification info */}
-          {process.env.NODE_ENV === 'development' && Array.isArray(displayItems) && displayItems.length > 0 && (
-            <div className="fixed top-16 left-4 z-50 bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-mono font-medium space-y-1 max-w-sm">
-              <div className="font-bold">🔧 PHASE 6 Verification</div>
-              <div>Total: {displayItems.length} items</div>
-              <div>Top-3: {displayItems.filter((item, idx) => (item as any).isTop3 || (item as any).is_top3 || idx < 3).length}</div>
-              <div>Images: {displayItems.filter(item => item.showImage).length}</div>
-              <div>Prompts: {displayItems.filter(item => item.showAiPrompt).length}</div>
-              <div>Growth: {displayItems.filter(item => {
-                const label = (item as any).growth_rate_label || (item as any).growthRateLabel;
-                return label && label !== 'Not enough data';
-              }).length} computed</div>
-              <div className="text-yellow-200">Check Console for Details</div>
+          {/* Debug indicator for development */}
+          {process.env.NODE_ENV === 'development' && Array.isArray(news) && news.length > 0 && (
+            <div className="fixed top-16 left-4 z-50 bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-mono font-medium">
+              🔧 Check Console for Debug Info
             </div>
           )}
 
@@ -675,12 +617,12 @@ export default function HomePage() {
           </div>
           
           {/* Hero Section */}
-          <HeroSection onViewDetails={setSelectedNews} displayItems={displayItems} />
+          <HeroSection onViewDetails={setSelectedNews} />
           
 
           {/* News Grid or Empty State */}
-          {displayItems.length > 0 ? (
-            <NewsGrid onViewDetails={setSelectedNews} displayItems={displayItems} />
+          {news.length > 0 ? (
+            <NewsGrid onViewDetails={setSelectedNews} />
           ) : (
             !loading && !error && (
               <section className="py-24 px-8">
@@ -733,7 +675,7 @@ export default function HomePage() {
           />
 
           {/* Image Debug Component (development only) */}
-          <ImageDebugger news={displayItems} title="Homepage Image Debug" />
+          <ImageDebugger news={news} title="Homepage Image Debug" />
         </div>
       </ErrorBoundary>
     </Layout>

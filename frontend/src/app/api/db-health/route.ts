@@ -17,7 +17,7 @@ export async function GET() {
     // [weekly-db-fix] Run minimal count query on main weekly table
     console.log('[db-health] Testing news_trends table connectivity...');
     const { count, error } = await supa
-      .from('public_v_home_news')
+      .from('news_trends')
       .select('id', { count: 'exact', head: true });
 
     if (error) {

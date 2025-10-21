@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { clientFetchHome, type HomeNewsItem } from '../../lib/data/newsClient'
+import { supabase } from '../../lib/supabaseClient'
+import { NewsTrend } from '../../types'
 import { LoadingSpinner } from '../ui/LoadingSpinner'
 
 interface SupabaseNewsGridProps {
   limit?: number
-  onNewsItemClick?: (item: HomeNewsItem) => void
+  onNewsItemClick?: (item: NewsTrend) => void
 }
 
 export function SupabaseNewsGrid({ limit = 10, onNewsItemClick }: SupabaseNewsGridProps) {
-  const [newsTrends, setNewsTrends] = useState<HomeNewsItem[]>([])
+  const [newsTrends, setNewsTrends] = useState<NewsTrend[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,15 +24,20 @@ export function SupabaseNewsGrid({ limit = 10, onNewsItemClick }: SupabaseNewsGr
       setLoading(true)
       setError(null)
 
-      console.log('[SupabaseNewsGrid] Fetching news trends via Plan-B secure data layer...')
+      // Fetch the most recent news trends from Supabase
+      const { data, error } = await supabase
+        .from('v_home_news')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit)
 
-      // Use the secure data layer (Plan-B Security Model)
-      const data = await clientFetchHome(limit)
+      if (error) {
+        throw error
+      }
 
       setNewsTrends(data || [])
-      console.log(`[SupabaseNewsGrid] ✅ Loaded ${data?.length || 0} news trends`)
     } catch (err) {
-      console.error('[SupabaseNewsGrid] Error fetching news trends:', err)
+      console.error('Error fetching news trends:', err)
       setError(err instanceof Error ? err.message : 'Failed to fetch news trends')
     } finally {
       setLoading(false)
@@ -93,7 +99,7 @@ export function SupabaseNewsGrid({ limit = 10, onNewsItemClick }: SupabaseNewsGr
           No News Trends Found
         </h3>
         <p className="text-concrete-600 dark:text-concrete-400 mb-6">
-          There are no news trends available yet. The data pipeline may still be processing or no recent content is available.
+          There are no news trends in the database yet. Try adding some data to your Supabase table.
         </p>
         <button
           onClick={handleRefresh}
@@ -113,9 +119,9 @@ export function SupabaseNewsGrid({ limit = 10, onNewsItemClick }: SupabaseNewsGr
           <h2 className="text-3xl font-heading font-bold text-concrete-900 dark:text-white">
             Latest News Trends
           </h2>
-                  <p className="text-concrete-600 dark:text-concrete-400 mt-2">
-          {newsTrends.length} trends loaded via Plan-B secure views
-        </p>
+          <p className="text-concrete-600 dark:text-concrete-400 mt-2">
+            {newsTrends.length} trends loaded from Supabase
+          </p>
         </div>
         <button
           onClick={handleRefresh}
@@ -144,7 +150,7 @@ export function SupabaseNewsGrid({ limit = 10, onNewsItemClick }: SupabaseNewsGr
 }
 
 // Individual news card component
-function NewsCard({ trend, rank, onClick }: { trend: HomeNewsItem; rank: number; onClick?: () => void }) {
+function NewsCard({ trend, rank, onClick }: { trend: NewsTrend; rank: number; onClick?: () => void }) {
   const isTop3 = rank <= 3
 
   return (
@@ -165,7 +171,7 @@ function NewsCard({ trend, rank, onClick }: { trend: HomeNewsItem; rank: number;
           )}
         </div>
         <div className="text-xs text-concrete-400 dark:text-concrete-600">
-          {trend.platform || 'Unknown'}
+          {trend.platform}
         </div>
       </div>
 
@@ -184,8 +190,7 @@ function NewsCard({ trend, rank, onClick }: { trend: HomeNewsItem; rank: number;
         {/* Footer with metrics */}
         <div className="flex items-center justify-between pt-4 border-t border-concrete-200 dark:border-void-800">
           <div className="text-xs text-concrete-500 dark:text-concrete-500">
-            {trend.published_date ? new Date(trend.published_date).toLocaleDateString() : 
-             trend.date ? new Date(trend.date).toLocaleDateString() : 'No date'}
+            {trend.date ? new Date(trend.date).toLocaleDateString() : 'No date'}
           </div>
           
           {trend.popularity_score && (

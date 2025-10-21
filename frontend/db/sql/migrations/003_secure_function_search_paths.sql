@@ -32,14 +32,14 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM pg_proc p
         JOIN pg_namespace n ON p.pronamespace = n.oid
-        WHERE n.nspname = 'public1'
+        WHERE n.nspname = 'public'
         AND p.proname = 'get_public_system_meta'
     ) THEN
-        ALTER FUNCTION public1.get_public_system_meta()
+        ALTER FUNCTION public.get_public_system_meta()
             SET search_path = pg_catalog, public;
-        RAISE NOTICE 'Search path set for public1.get_public_system_meta';
+        RAISE NOTICE 'Search path set for public.get_public_system_meta';
     ELSE
-        RAISE NOTICE 'Function public1.get_public_system_meta not found. Skipping.';
+        RAISE NOTICE 'Function public.get_public_system_meta not found. Skipping.';
     END IF;
 END $$;
 
@@ -49,14 +49,14 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM pg_proc p
         JOIN pg_namespace n ON p.pronamespace = n.oid
-        WHERE n.nspname = 'public1'
+        WHERE n.nspname = 'public'
         AND p.proname = 'get_public_home_news'
     ) THEN
-        ALTER FUNCTION public1.get_public_home_news()
+        ALTER FUNCTION public.get_public_home_news()
             SET search_path = pg_catalog, public;
-        RAISE NOTICE 'Search path set for public1.get_public_home_news';
+        RAISE NOTICE 'Search path set for public.get_public_home_news';
     ELSE
-        RAISE NOTICE 'Function public1.get_public_home_news not found. Skipping.';
+        RAISE NOTICE 'Function public.get_public_home_news not found. Skipping.';
     END IF;
 END $$;
 
@@ -71,14 +71,14 @@ BEGIN
     FROM pg_proc p
     JOIN pg_namespace n ON p.pronamespace = n.oid
     WHERE (n.nspname = 'public' AND p.proname = 'util_has_column')
-    OR (n.nspname = 'public1' AND p.proname IN ('get_public_system_meta', 'get_public_home_news'));
+    OR (n.nspname = 'public' AND p.proname IN ('get_public_system_meta', 'get_public_home_news'));
     
     -- Count functions with search_path set
     SELECT COUNT(*) INTO secured_count
     FROM pg_proc p
     JOIN pg_namespace n ON p.pronamespace = n.oid
     WHERE ((n.nspname = 'public' AND p.proname = 'util_has_column')
-    OR (n.nspname = 'public1' AND p.proname IN ('get_public_system_meta', 'get_public_home_news')))
+    OR (n.nspname = 'public' AND p.proname IN ('get_public_system_meta', 'get_public_home_news')))
     AND proconfig IS NOT NULL
     AND EXISTS (
         SELECT 1 FROM unnest(proconfig) AS config

@@ -6,16 +6,10 @@ import { NewsCard } from './NewsCard'
 import { getText } from '../../lib/i18n'
 
 export function NewsGrid() {
-  const { renderList, loading, error } = useNewsStore()
+  const { filteredNews } = useNewsStore()
   const { language } = useUIStore()
 
-  // Use safe renderList (already has fallback chain in store)
-  const items = Array.isArray(renderList) ? renderList : []
-
-  console.log('[NewsGrid] Rendering with items:', items.length, 'loading:', loading, 'error:', error)
-
-  // Only show empty state if request succeeded and normalized data is truly empty
-  if (items.length === 0 && !loading) {
+  if (filteredNews.length === 0) {
     return (
       <div className="text-center py-16">
         <div className="max-w-md mx-auto">
@@ -25,13 +19,10 @@ export function NewsGrid() {
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-concrete-900 dark:text-white mb-2">
-            {error ? 'Unable to Load News' : 'No Trending Stories Right Now'}
+            No matching news found
           </h3>
           <p className="text-concrete-600 dark:text-concrete-400 text-sm">
-            {error 
-              ? `Error: ${error}. Please try refreshing the page.`
-              : 'Check back later for fresh content or try adjusting your filters.'
-            }
+            Try adjusting your filters or search terms to find more news.
           </p>
         </div>
       </div>
@@ -47,7 +38,7 @@ export function NewsGrid() {
             Trending News
           </h2>
           <span className="px-3 py-1 bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-300 text-sm font-medium rounded-full">
-            {items.length} {items.length === 1 ? 'story' : 'stories'}
+            {filteredNews.length} {filteredNews.length === 1 ? 'story' : 'stories'}
           </span>
         </div>
         
@@ -59,9 +50,9 @@ export function NewsGrid() {
 
       {/* News grid */}
       <div className="space-y-6">
-        {items.map((news, index) => (
+        {filteredNews.map((news, index) => (
           <div
-            key={news.id || news.video_id || `item-${index}`}
+            key={news.video_id}
             className="animate-in"
             style={{ animationDelay: `${index * 50}ms` }}
           >
@@ -71,7 +62,7 @@ export function NewsGrid() {
       </div>
 
       {/* Load more button (for future pagination) */}
-      {items.length >= 20 && (
+      {filteredNews.length >= 20 && (
         <div className="text-center pt-8">
           <button className="btn-secondary">
             Load More Stories

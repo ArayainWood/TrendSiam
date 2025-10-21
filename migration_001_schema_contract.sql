@@ -106,27 +106,12 @@ CREATE TRIGGER update_stats_updated_at
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
 
--- Apply trigger to news_trends (SECTION G) - Enhanced for fresh metrics
+-- Apply trigger to news_trends (SECTION G)
 DROP TRIGGER IF EXISTS update_news_trends_updated_at ON news_trends;
 CREATE TRIGGER update_news_trends_updated_at 
     BEFORE UPDATE ON news_trends 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
-
--- Ensure updated_at is always set on INSERT as well
-CREATE OR REPLACE FUNCTION set_updated_at_on_insert()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-DROP TRIGGER IF EXISTS set_news_trends_updated_at_on_insert ON news_trends;
-CREATE TRIGGER set_news_trends_updated_at_on_insert
-    BEFORE INSERT ON news_trends 
-    FOR EACH ROW 
-    EXECUTE FUNCTION set_updated_at_on_insert();
 
 -- 5. Set up RLS Policies
 -- =============================================

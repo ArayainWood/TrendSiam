@@ -1,4 +1,4 @@
-/** @type {import('next').NextConfig} */
+/** @type {import('next').NextConfig */
 
 // ================================================================
 // ENV SENTINEL: Verify .env.local exists before build

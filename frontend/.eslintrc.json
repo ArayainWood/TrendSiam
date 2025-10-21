@@ -2,28 +2,5 @@
   "extends": [
     "next/core-web-vitals",
     "next/typescript"
-  ],
-  "rules": {
-    "@typescript-eslint/restrict-plus-operands": "error",
-    "@typescript-eslint/restrict-template-expressions": "error",
-    "no-restricted-syntax": [
-      "error",
-      {
-        "selector": "BinaryExpression[operator='+'][left.type='Identifier'][right.type='Literal']",
-        "message": "PHASE 5: Avoid adding literals to potentially string variables. Use Number() conversion first."
-      },
-      {
-        "selector": "BinaryExpression[operator='*'][left.type='Identifier']",
-        "message": "PHASE 5: Avoid multiplication with potentially string variables. Use Number() conversion first."
-      },
-      {
-        "selector": "BinaryExpression[operator='/'][left.type='Identifier']",
-        "message": "PHASE 5: Avoid division with potentially string variables. Use Number() conversion first."
-      },
-      {
-        "selector": "BinaryExpression[operator='>'][left.type='Identifier'][right.type='Literal'][right.value=0]",
-        "message": "PHASE 5: Avoid comparing potentially string variables to numbers. Use Number() conversion first."
-      }
-    ]
-  }
+  ]
 }

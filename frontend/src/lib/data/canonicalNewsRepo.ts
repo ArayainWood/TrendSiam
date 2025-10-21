@@ -1,59 +1,29 @@
 /**
- * Canonical News Repository - Plan-B Security Compliant
+ * Canonical News Repository
  * 
- * Data access layer that uses public views only (no base table access)
- * All queries use anon key and public_v_* views for Plan-B security
+ * Data access layer that returns properly typed and mapped news items
+ * Uses the canonical mapping between DB (snake_case) and UI (camelCase)
  */
 
 import 'server-only';
-import { fetchHomeFeed, fetchNewsById, searchNewsApi, type HomeNewsItem } from './news';
+import { createClient } from '@supabase/supabase-js';
 import { DbNewsRow, UiNewsItem, mapDbToUi, applyLegacyCompat } from '@/lib/db/types/canonical';
 
-/**
- * Convert HomeNewsItem to UiNewsItem format
- * Bridges the gap between the secure data layer and existing UI expectations
- */
-function convertToUiNewsItem(item: HomeNewsItem, rank: number): UiNewsItem {
-  // Convert to DbNewsRow format first, then use existing mapping
-  const dbRow: DbNewsRow = {
-    id: item.id,
-    external_id: item.external_id,
-    video_id: item.video_id,
-    title: item.title,
-    summary: item.summary,
-    summary_en: item.summary_en,
-    description: item.description,
-    category: item.category,
-    platform: item.platform,
-    channel: item.channel,
-    date: item.date,
-    published_date: item.published_date,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
-    summary_date: item.summary_date,
-    view_count: item.view_count,
-    like_count: item.like_count,
-    comment_count: item.comment_count,
-    duration: item.duration,
-    raw_view: item.raw_view,
-    popularity_score: item.popularity_score,
-    popularity_score_precise: item.popularity_score_precise,
-    ai_image_url: item.ai_image_url,
-    ai_image_prompt: item.ai_image_prompt,
-    reason: item.reason,
-    growth_rate: item.growth_rate,
-    platform_mentions: item.platform_mentions,
-    keywords: item.keywords,
-    ai_opinion: item.ai_opinion,
-    score_details: item.score_details,
-    platforms_raw: item.platforms_raw,
-    rank,
-    image_url: item.image_url,
-    display_image_url_raw: item.display_image_url_raw,
-    is_ai_image: item.is_ai_image,
-  };
+// Create public Supabase client
+function getPublicSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
-  return mapDbToUi(dbRow);
+  if (!url || !anonKey) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  }
+  
+  return createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    }
+  });
 }
 
 export interface NewsRepoResult {
@@ -63,28 +33,47 @@ export interface NewsRepoResult {
 }
 
 /**
- * Fetch home news using Plan-B secure data layer
+ * Fetch home news from v_home_news view
  * Returns fully mapped UiNewsItem array with legacy compatibility
  */
 export async function fetchHomeNews(limit = 20): Promise<NewsRepoResult> {
+  const supabase = getPublicSupabase();
+  
   try {
-    console.log('[canonicalNewsRepo] Fetching via Plan-B secure data layer...');
+    console.log('[canonicalNewsRepo] Fetching from v_home_news view...');
     
-    // Use the secure data layer (public views only)
-    const result = await fetchHomeFeed(limit);
+    // Query the optimized Home view
+    const { data, error, count } = await supabase
+      .from('v_home_news')
+      .select('*', { count: 'exact' })
+      .order('popularity_score_precise', { ascending: false })
+      .order('published_date', { ascending: false, nullsFirst: false })
+      .limit(limit);
     
-    if (!result.data || result.data.length === 0) {
+    if (error) {
+      console.error('[canonicalNewsRepo] Query error:', error);
+      return { items: [], totalCount: 0, error: error.message };
+    }
+    
+    if (!data || data.length === 0) {
       console.warn('[canonicalNewsRepo] No items found');
       return { items: [], totalCount: 0 };
     }
     
-    // Convert HomeNewsItem to UiNewsItem format
-    const uiItems = result.data.map((item: HomeNewsItem, index: number) => convertToUiNewsItem(item, index + 1));
+    // Map DB rows to UI items
+    const uiItems = data.map((row, index) => {
+      // Add rank based on order
+      const dbRow: DbNewsRow = {
+        ...row,
+        rank: index + 1
+      };
+      return mapDbToUi(dbRow);
+    });
     
     // Apply legacy compatibility
     const compatItems = applyLegacyCompat(uiItems);
     
-    console.log(`[canonicalNewsRepo] ✅ Fetched and mapped ${compatItems.length} items via Plan-B`);
+    console.log(`[canonicalNewsRepo] ✅ Fetched and mapped ${compatItems.length} items`);
     
     // Log stats
     const withImages = compatItems.filter(item => item.hasRealImage);
@@ -93,7 +82,7 @@ export async function fetchHomeNews(limit = 20): Promise<NewsRepoResult> {
     
     return {
       items: compatItems,
-      totalCount: compatItems.length
+      totalCount: count || compatItems.length
     };
     
   } catch (error) {
@@ -107,39 +96,40 @@ export async function fetchHomeNews(limit = 20): Promise<NewsRepoResult> {
 }
 
 /**
- * Fetch news by date range using Plan-B secure data layer
+ * Fetch news by date range
  */
 export async function fetchNewsByDateRange(
   startDate: Date,
   endDate: Date,
   limit = 100
 ): Promise<NewsRepoResult> {
+  const supabase = getPublicSupabase();
+  
   try {
-    // Use the secure data layer with date filtering
-    const result = await fetchHomeFeed(limit);
+    const { data, error, count } = await supabase
+      .from('v_home_news')
+      .select('*', { count: 'exact' })
+      .gte('published_date', startDate.toISOString())
+      .lte('published_date', endDate.toISOString())
+      .order('popularity_score_precise', { ascending: false })
+      .limit(limit);
     
-    if (!result.data) {
-      return { items: [], totalCount: 0 };
+    if (error) {
+      console.error('[canonicalNewsRepo] Date range query error:', error);
+      return { items: [], totalCount: 0, error: error.message };
     }
     
-    // Filter by date range (client-side filtering since view doesn't support date range params yet)
-    const filteredData = result.data.filter((item: HomeNewsItem) => {
-      const publishedDate = item.published_date ? new Date(item.published_date) : null;
-      const createdDate = new Date(item.created_at);
-      const itemDate = publishedDate || createdDate;
-      
-      return itemDate >= startDate && itemDate <= endDate;
+    // Map and apply compatibility
+    const uiItems = (data || []).map((row, index) => {
+      const dbRow: DbNewsRow = { ...row, rank: index + 1 };
+      return mapDbToUi(dbRow);
     });
     
-    // Convert to UiNewsItem format
-    const uiItems = filteredData.map((item: HomeNewsItem, index: number) => convertToUiNewsItem(item, index + 1));
     const compatItems = applyLegacyCompat(uiItems);
-    
-    console.log(`[canonicalNewsRepo] ✅ Fetched ${compatItems.length} items in date range via Plan-B`);
     
     return {
       items: compatItems,
-      totalCount: filteredData.length
+      totalCount: count || compatItems.length
     };
     
   } catch (error) {
@@ -153,19 +143,25 @@ export async function fetchNewsByDateRange(
 }
 
 /**
- * Get single news item by ID using Plan-B secure data layer
+ * Get single news item by ID
  */
 export async function getNewsById(id: string): Promise<UiNewsItem | null> {
+  const supabase = getPublicSupabase();
+  
   try {
-    const result = await fetchNewsById(id);
+    const { data, error } = await supabase
+      .from('v_home_news')
+      .select('*')
+      .eq('id', id)
+      .single();
     
-    if (!result.data) {
-      console.warn('[canonicalNewsRepo] News item not found:', id);
+    if (error || !data) {
+      console.error('[canonicalNewsRepo] Get by ID error:', error);
       return null;
     }
     
-    // Convert to UiNewsItem format
-    const uiItem = convertToUiNewsItem(result.data, 1);
+    const dbRow: DbNewsRow = { ...data, rank: 1 };
+    const uiItem = mapDbToUi(dbRow);
     const { legacyUiCompat } = await import('@/lib/db/types/canonical');
     return legacyUiCompat(uiItem);
     
@@ -176,26 +172,34 @@ export async function getNewsById(id: string): Promise<UiNewsItem | null> {
 }
 
 /**
- * Search news by text query using Plan-B secure data layer
+ * Search news by text query
  */
 export async function searchNews(query: string, limit = 20): Promise<NewsRepoResult> {
+  const supabase = getPublicSupabase();
+  
   try {
-    // Use the secure search function (already imported as searchNewsApi)
-    const result = await searchNewsApi(query, limit);
+    const { data, error, count } = await supabase
+      .from('v_home_news')
+      .select('*', { count: 'exact' })
+      .or(`title.ilike.%${query}%,summary.ilike.%${query}%,channel.ilike.%${query}%`)
+      .order('popularity_score_precise', { ascending: false })
+      .limit(limit);
     
-    if (!result.data) {
-      return { items: [], totalCount: 0 };
+    if (error) {
+      console.error('[canonicalNewsRepo] Search error:', error);
+      return { items: [], totalCount: 0, error: error.message };
     }
     
-    // Convert to UiNewsItem format
-    const uiItems = result.data.map((item: HomeNewsItem, index: number) => convertToUiNewsItem(item, index + 1));
-    const compatItems = applyLegacyCompat(uiItems);
+    const uiItems = (data || []).map((row, index) => {
+      const dbRow: DbNewsRow = { ...row, rank: index + 1 };
+      return mapDbToUi(dbRow);
+    });
     
-    console.log(`[canonicalNewsRepo] ✅ Found ${compatItems.length} items for query "${query}" via Plan-B`);
+    const compatItems = applyLegacyCompat(uiItems);
     
     return {
       items: compatItems,
-      totalCount: compatItems.length
+      totalCount: count || compatItems.length
     };
     
   } catch (error) {

@@ -216,14 +216,8 @@ export function shouldHaveAIImage(rank: number): boolean {
 /**
  * Calculate AI images count for a list of stories
  * Only counts AI images from Top 3 stories
- * Updated 2025-10-04: Uses showImage or imageUrl presence (API contract)
  */
-export function calculateAIImagesCount(stories: Array<{ 
-  rank?: number | null; 
-  isAIImage?: boolean; 
-  showImage?: boolean;
-  imageUrl?: string | null;
-}>): number {
+export function calculateAIImagesCount(stories: Array<{ rank?: number; isAIImage?: boolean }>): number {
   // Get the top 3 stories by rank or by position if no rank
   const sortedStories = [...stories].sort((a, b) => {
     const rankA = a.rank || stories.indexOf(a) + 1;
@@ -233,12 +227,5 @@ export function calculateAIImagesCount(stories: Array<{
   
   // Take only the top 3 and count how many have AI images
   const top3 = sortedStories.slice(0, AI_IMAGE_RULES.TOP_STORIES_COUNT);
-  
-  // Check multiple possible properties for AI image presence
-  return top3.filter(story => {
-    // Priority order: showImage (API response), isAIImage (legacy), or imageUrl presence
-    if (story.showImage !== undefined) return story.showImage === true;
-    if (story.isAIImage !== undefined) return story.isAIImage === true;
-    return story.imageUrl !== null && story.imageUrl !== undefined && story.imageUrl !== '';
-  }).length;
+  return top3.filter(story => story.isAIImage === true).length;
 }

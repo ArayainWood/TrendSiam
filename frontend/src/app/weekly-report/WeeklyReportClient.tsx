@@ -250,29 +250,18 @@ export default function WeeklyReportClient({ snapshotData, buildTag }: WeeklyRep
           {/* Error State */}
           {!snapshotData.success && (
             <div className="text-center py-16">
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6 max-w-lg mx-auto">
-                <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
-                  Weekly Report Not Available
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md mx-auto">
+                <h3 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2">
+                  Unable to Load Report
                 </h3>
-                <p className="text-yellow-700 dark:text-yellow-300 text-sm mb-4">
-                  {snapshotData.error?.includes('No snapshots available') 
-                    ? 'Weekly snapshots need to be generated first. This is a one-time setup process.'
-                    : (snapshotData.error || 'No snapshot data available')
-                  }
+                <p className="text-red-600 dark:text-red-300 text-sm mb-4">
+                  {snapshotData.error || 'No snapshot data available'}
                 </p>
-                {snapshotData.error?.includes('No snapshots available') && (
-                  <div className="bg-yellow-100 dark:bg-yellow-800/30 rounded-lg p-3 mb-4 text-left">
-                    <p className="text-xs text-yellow-800 dark:text-yellow-200 font-mono">
-                      To generate snapshots, run:<br/>
-                      <code className="bg-yellow-200 dark:bg-yellow-700 px-1 rounded">npm run snapshot:build:publish</code>
-                    </p>
-                  </div>
-                )}
                 <button
                   onClick={() => window.location.reload()}
                   className="btn-primary text-sm"
                 >
-                  Check Again
+                  Try Again
                 </button>
               </div>
             </div>

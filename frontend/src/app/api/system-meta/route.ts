@@ -1,25 +1,13 @@
 /**
  * SECTION F - System Meta API
  * Lightweight endpoint to check system_meta values for auto-refresh
- * Uses public view for anon access (Plan-B security model)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function getAnonClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) {
-    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  }
-  return createClient(url, anon, {
-    auth: { persistSession: false },
-  });
-}
 
 export async function GET(request: NextRequest) {
   const key = request.nextUrl.searchParams.get('key');
@@ -32,10 +20,10 @@ export async function GET(request: NextRequest) {
   }
   
   try {
-    const supabase = getAnonClient();
+    const supabase = getSupabaseAdmin();
     
     const { data, error } = await supabase
-      .from('public_v_system_meta')
+      .from('system_meta')
       .select('value, updated_at')
       .eq('key', key)
       .single();

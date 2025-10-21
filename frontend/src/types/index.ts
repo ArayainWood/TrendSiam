@@ -31,7 +31,6 @@ export interface NewsItem {
   ai_image_url?: string | null
   ai_image_prompt?: string | null
   display_image_url?: string // [rank-sync-fix] Pre-resolved display image URL from server
-  is_top3?: boolean // Flag indicating if this is a top-3 story for AI prompt access
   
   // NEW: Additional Analysis field
   analysis?: {
@@ -128,7 +127,7 @@ export interface NewsTrend {
   
   // View details metadata
   raw_view: string | null
-  growth_rate: number
+  growth_rate: string | null
   platform_mentions: string | null
   keywords: string | null
   ai_opinion: string | null
@@ -137,14 +136,6 @@ export interface NewsTrend {
   // System fields
   created_at?: string
   updated_at?: string
-  published_at?: string
-  
-  // UI fields from view
-  image_url?: string | null
-  is_ai_image?: boolean
-  platforms_raw?: string | null
-  safe_image_url?: string | null
-  view_details?: any
 }
 
 // Extended news trend interface for API responses

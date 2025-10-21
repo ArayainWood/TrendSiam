@@ -17,9 +17,6 @@ let fontsRegistered = false;
 /**
  * Register universal font family that handles Thai, Latin, and basic symbols
  * This prevents font fallback mid-line which causes glyph overlapping
- * 
- * Note: Multilingual fonts (CJK, Arabic, Emoji) can be registered on-demand
- * via pdfMultilingualFonts.ts for specific snapshots
  */
 export function registerPdfFonts(): void {
   if (fontsRegistered) {
@@ -30,32 +27,15 @@ export function registerPdfFonts(): void {
   try {
     const { REG, BOLD } = resolveThaiFonts();
     
-    console.log('[pdfFonts] 🔧 Registering universal PDF font family (Thai + Latin base)...');
+    console.log('[pdfFonts] 🔧 Registering universal PDF font family...');
     
     // Register the universal font family with Thai fonts as the base
     // This ensures consistent metrics for Thai + Latin mixed text
-    // 
-    // CRITICAL: @react-pdf/renderer uses fontkit for subsetting
-    // Aggressive subsetting can remove OpenType tables (GPOS/GSUB) needed for Thai
-    // We disable subsetting to preserve Thai shaping features
     Font.register({
       family: UNIVERSAL_FONT_FAMILY,
       fonts: [
-        { 
-          src: REG, 
-          fontWeight: 'normal', 
-          fontStyle: 'normal',
-          // Disable subsetting to preserve OpenType shaping tables
-          // @ts-ignore - subset option exists but not in types
-          subset: false
-        },
-        { 
-          src: BOLD, 
-          fontWeight: 'bold', 
-          fontStyle: 'normal',
-          // @ts-ignore - subset option exists but not in types
-          subset: false
-        },
+        { src: REG, fontWeight: 'normal', fontStyle: 'normal' },
+        { src: BOLD, fontWeight: 'bold', fontStyle: 'normal' },
       ]
     });
     
@@ -67,18 +47,8 @@ export function registerPdfFonts(): void {
       Font.register({
         family: fontName,
         fonts: [
-          { 
-            src: REG, 
-            fontWeight: 'normal',
-            // @ts-ignore - subset option exists but not in types
-            subset: false
-          },
-          { 
-            src: BOLD, 
-            fontWeight: 'bold',
-            // @ts-ignore - subset option exists but not in types
-            subset: false
-          },
+          { src: REG, fontWeight: 'normal' },
+          { src: BOLD, fontWeight: 'bold' },
         ]
       });
     });

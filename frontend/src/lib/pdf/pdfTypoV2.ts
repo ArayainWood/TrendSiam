@@ -1,13 +1,8 @@
 /**
- * PDF Typography Preprocessor v3
+ * PDF Typography Preprocessor v2
  * 
- * Enhanced version with Unicode normalization and character sanitization
- * Fixes overlapping glyphs, misplaced diacritics, and garbled text
- * 
- * Changes from v2:
- * - Added Unicode NFC normalization to prevent NFD decomposed characters
- * - Strip zero-width and control characters that cause layout issues
- * - Remove bidirectional controls that can cause text reordering
+ * Enhanced version with more visible spacing for better PDF rendering
+ * Uses regular spaces instead of hair/thin spaces for better compatibility
  */
 
 import 'server-only';
@@ -18,54 +13,14 @@ const SPACE = ' ';
 // Double space for emoji boundaries
 const DOUBLE_SPACE = '  ';
 
-// Characters that cause rendering issues in PDF
-const PROBLEMATIC_CHARS = [
-  '\u200B', // Zero Width Space
-  '\u200C', // Zero Width Non-Joiner
-  '\u200D', // Zero Width Joiner
-  '\uFEFF', // Zero Width No-Break Space (BOM)
-  '\u202A', // Left-to-Right Embedding
-  '\u202B', // Right-to-Left Embedding
-  '\u202C', // Pop Directional Formatting
-  '\u202D', // Left-to-Right Override
-  '\u202E', // Right-to-Left Override
-  '\u00AD', // Soft Hyphen
-  '\r',     // Carriage Return
-  '\t',     // Tab
-];
-
-/**
- * Sanitize and normalize Unicode text for PDF rendering
- * 
- * Steps:
- * 1. Normalize to NFC (Canonical Composition) to prevent stacked diacritics
- * 2. Strip zero-width and control characters
- * 3. Remove bidirectional controls
- */
-function sanitizeUnicode(text: string): string {
-  // 1. Normalize to NFC (prevents NFD decomposed characters)
-  let sanitized = text.normalize('NFC');
-  
-  // 2. Remove problematic characters
-  for (const char of PROBLEMATIC_CHARS) {
-    sanitized = sanitized.replace(new RegExp(char, 'g'), '');
-  }
-  
-  // 3. Replace control characters (except newline) with space
-  sanitized = sanitized.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, ' ');
-  
-  return sanitized;
-}
-
 /**
  * Add strategic spacing at script boundaries to prevent overlapping
- * V3: Added Unicode normalization before spacing logic
+ * V2: Uses regular spaces for better visibility in PDF
  */
 export function addScriptBoundarySpacing(text: string | null | undefined): string {
   if (!text) return '';
   
-  // Step 1: Sanitize and normalize Unicode
-  let processed = sanitizeUnicode(String(text));
+  let processed = String(text);
   
   // 1. Thai ↔ Latin transitions
   // Thai script followed by Latin letters
@@ -129,12 +84,11 @@ export function addScriptBoundarySpacing(text: string | null | undefined): strin
 
 /**
  * Process title text with enhanced spacing for problematic cases
- * V3: Added Unicode normalization to prevent overlapping diacritics
+ * V2: More aggressive spacing for known problem patterns
  */
 export function processTitleForPDF(title: string | null | undefined): string {
   if (!title) return '';
   
-  // addScriptBoundarySpacing now includes sanitization
   let processed = addScriptBoundarySpacing(title);
   
   // Additional title-specific processing

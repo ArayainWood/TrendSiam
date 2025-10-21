@@ -26,8 +26,8 @@ export const createPDFStyles = () => StyleSheet.create({
   text: {
     fontFamily: FONT_FAMILY,
     fontSize: 12,
-    lineHeight: 1.35,        // Optimal for Thai (not excessive)
-    letterSpacing: 0,        // No extra spacing for natural Thai rendering
+    lineHeight: 1.8,         // Increased for Thai tone marks
+    letterSpacing: 0.05,     // Reduced for natural Thai spacing
 
   },
   
@@ -36,9 +36,9 @@ export const createPDFStyles = () => StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 18,
     fontWeight: 'bold',
-    lineHeight: 1.35,        // Consistent Thai-optimized line height
+    lineHeight: 1.5,         // Slightly tighter for headings
     marginBottom: 8,
-    letterSpacing: 0,        // No extra spacing
+    letterSpacing: 0,        // No extra spacing for large text
 
   },
   
@@ -46,7 +46,7 @@ export const createPDFStyles = () => StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 14,
     fontWeight: 'bold',
-    lineHeight: 1.35,        // Consistent Thai-optimized line height
+    lineHeight: 1.5,
     marginBottom: 6,
     letterSpacing: 0,
 
@@ -56,7 +56,7 @@ export const createPDFStyles = () => StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 13,
     fontWeight: 'bold',
-    lineHeight: 1.35,        // Consistent Thai-optimized line height
+    lineHeight: 1.5,
     marginBottom: 4,
     letterSpacing: 0,
 
@@ -75,28 +75,28 @@ export const createPDFStyles = () => StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 11,
     fontWeight: 'bold',
-    lineHeight: 1.65,        // Thai-safe line height (1.65 prevents diacritic clipping)
-    marginBottom: 4,         // Reduced spacing
-    letterSpacing: 0,        // Zero letter spacing for natural Thai rendering
+    lineHeight: 2.5,         // Extra line height for Thai tone marks and vowels
+    marginBottom: 6,         // More space between items
+    letterSpacing: 0.2,      // Slightly reduced for better Thai rendering
 
     textAlign: 'left',
     maxWidth: '100%',
     overflow: 'hidden',      // React-PDF only supports hidden
 
-    paddingTop: 3,           // Extra clearance for combining marks
-    paddingBottom: 3,        // Extra clearance for combining marks
+    paddingTop: 2,           // Extra padding for ascending marks
+    paddingBottom: 2,        // Extra padding for descending marks
   },
   
   // Metadata text (smaller, less critical)
   itemMeta: {
     fontFamily: FONT_FAMILY,
     fontSize: 9,
-    lineHeight: 1.35,        // Consistent with base text
+    lineHeight: 1.8,         // Increased for Thai marks
     color: '#6B7280',
-    letterSpacing: 0,        // No extra spacing for natural Thai rendering
+    letterSpacing: 0,        // No extra spacing for small Thai text
 
-    paddingTop: 0,           // No padding needed
-    paddingBottom: 0,
+    paddingTop: 1,           // Small padding for tone marks
+    paddingBottom: 1,
   },
   
   // Footer and supplementary text
@@ -126,22 +126,24 @@ export const createPDFStyles = () => StyleSheet.create({
 
   },
   
-  // Special styles for problematic content (DISABLED - causes Thai diacritic breakage)
-  // letterSpacing breaks grapheme clusters in @react-pdf/renderer
+  // Special styles for problematic content
   mixedScript: {
     fontFamily: FONT_FAMILY,
     fontSize: 11,
     lineHeight: 1.8,         // Maximum line height for mixed scripts
-    letterSpacing: 0,        // CRITICAL: Must be 0 for Thai/CJK
-    wordSpacing: 0,          // CRITICAL: Must be 0 for Thai/CJK
+    letterSpacing: 0.2,      // Maximum letter spacing
+    wordSpacing: 2,          // Maximum word spacing
+
   },
   
-  // Emoji-heavy content (DISABLED - causes rendering issues)
+  // Emoji-heavy content
   emojiText: {
     fontFamily: FONT_FAMILY,
     fontSize: 11,
     lineHeight: 1.9,         // Extra space for emoji
-    letterSpacing: 0,        // CRITICAL: Must be 0 for mixed emoji+text
+    letterSpacing: 0.25,     // Extra spacing around emoji
+
+
   }
 });
 
@@ -153,8 +155,9 @@ export function getBaseTextStyle() {
     fontFamily: FONT_FAMILY,
     fontSize: 12,
     lineHeight: 1.65,
-    letterSpacing: 0,        // CRITICAL: Must be 0 for Thai/CJK
-    wordSpacing: 0,          // CRITICAL: Must be 0 for Thai/CJK
+    letterSpacing: 0.1,
+    wordSpacing: 1,
+
   };
 }
 
@@ -167,7 +170,9 @@ export function getMixedScriptTitleStyle() {
     fontSize: 11,
     fontWeight: 'bold' as const,
     lineHeight: 1.75,
-    letterSpacing: 0,        // CRITICAL: Must be 0 for Thai/CJK
+    letterSpacing: 0.15,
+
+
   };
 }
 
@@ -180,7 +185,8 @@ export function getMetadataStyle() {
     fontSize: 9,
     lineHeight: 1.5,
     color: '#6B7280',
-    letterSpacing: 0,        // CRITICAL: Must be 0 for Thai/CJK
+    letterSpacing: 0.05,
+
   };
 }
 

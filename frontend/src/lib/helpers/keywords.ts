@@ -65,20 +65,9 @@ function extractFromText(text: string): string[] {
 export function collectDisplayKeywords(item: UINewsItem | UiNewsItem): { keywords: string[]; source: 'db' | 'platform' | 'derived' | 'fallback' } {
   const maxKeywords = 6;
   
-  // 1. Try DB keywords first - handle both keywordsList array and keywords string
-  if ('keywordsList' in item && item.keywordsList && item.keywordsList.length > 0) {
-    const dbKeywords = item.keywordsList
-      .map((k: string) => cleanKeyword(k))
-      .filter((k): k is string => k !== null)
-      .slice(0, maxKeywords);
-    
-    if (dbKeywords.length > 0) {
-      return { keywords: dbKeywords, source: 'db' };
-    }
-  } else if (typeof item.keywords === 'string' && item.keywords.length > 0) {
-    // Parse keywords string
-    const keywordsList = item.keywords.split(',').map(k => k.trim()).filter(k => k);
-    const dbKeywords = keywordsList
+  // 1. Try DB keywords first
+  if (item.keywords && item.keywords.length > 0) {
+    const dbKeywords = item.keywords
       .map(k => cleanKeyword(k))
       .filter((k): k is string => k !== null)
       .slice(0, maxKeywords);

@@ -80,10 +80,10 @@ export function EnhancedNewsDetailModal({ news, isOpen, onClose }: EnhancedNewsD
   }
 
   const handleCopyPrompt = async () => {
-    if (!news.aiPrompt?.trim()) return
+    if (!news.aiImagePrompt?.trim()) return
     
     try {
-      await navigator.clipboard.writeText(news.aiPrompt)
+      await navigator.clipboard.writeText(news.aiImagePrompt)
       toast.success(language.code === 'th' ? 'คัดลอกพรอมต์แล้ว!' : 'AI prompt copied!')
     } catch (error) {
       toast.error(language.code === 'th' ? 'ไม่สามารถคัดลอกได้' : 'Failed to copy prompt')
@@ -194,7 +194,7 @@ export function EnhancedNewsDetailModal({ news, isOpen, onClose }: EnhancedNewsD
                 </button>
                 
                 {/* AI Prompt Button - only show if prompt exists */}
-                {news.aiPrompt?.trim() && news.aiPrompt.trim().length > 0 && (
+                {news.aiImagePrompt?.trim() && news.aiImagePrompt.trim().length > 0 && (
                   <button
                     onClick={() => setShowPrompt(!showPrompt)}
                     className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 rounded-lg transition-colors text-sm font-medium text-purple-700 dark:text-purple-300"
@@ -217,7 +217,7 @@ export function EnhancedNewsDetailModal({ news, isOpen, onClose }: EnhancedNewsD
             </div>
 
             {/* AI Prompt Panel - appears when button is clicked */}
-            {showPrompt && news.aiPrompt?.trim() && news.aiPrompt.trim().length > 0 && (
+            {showPrompt && news.aiImagePrompt?.trim() && news.aiImagePrompt.trim().length > 0 && (
               <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-mono uppercase tracking-wide text-purple-600 dark:text-purple-400">
@@ -232,7 +232,7 @@ export function EnhancedNewsDetailModal({ news, isOpen, onClose }: EnhancedNewsD
                   </button>
                 </div>
                 <p className="text-sm text-purple-800 dark:text-purple-200 font-mono leading-relaxed whitespace-pre-wrap break-words">
-                  {news.aiPrompt}
+                  {news.aiImagePrompt}
                 </p>
               </div>
             )}
@@ -253,7 +253,7 @@ export function EnhancedNewsDetailModal({ news, isOpen, onClose }: EnhancedNewsD
                   <span className="text-lg">/100</span>
                 </div>
                 <p className="text-sm text-concrete-700 dark:text-concrete-300 leading-relaxed" data-testid="popularity-subtext">
-                  {news.popularityNarrative || getPopularitySubtext(news)}
+                  {getPopularitySubtext(news)}
                 </p>
               </div>
 
@@ -288,7 +288,7 @@ export function EnhancedNewsDetailModal({ news, isOpen, onClose }: EnhancedNewsD
                   <div className="text-center p-3 bg-concrete-100 dark:bg-void-800 rounded-lg">
                     <Eye className="w-4 h-4 mx-auto mb-1 text-concrete-600 dark:text-concrete-400" />
                     <div className="text-sm font-medium text-concrete-900 dark:text-white">
-                      {formatNumber(news.videoViews || news.views)}
+                      {formatNumber(news.views)}
                     </div>
                     <div className="text-xs text-concrete-500 dark:text-concrete-500">
                       Views
@@ -357,8 +357,8 @@ export function EnhancedNewsDetailModal({ news, isOpen, onClose }: EnhancedNewsD
                         {language.code === 'th' ? 'อัตราการเติบโต' : 'Growth Rate'}
                       </span>
                     </div>
-                    <div className={`text-lg font-heading font-semibold ${getGrowthRateColor(news.growthRateValue)}`}>
-                      {formatGrowthRate(news.growthRateValue).text}
+                    <div className={`text-lg font-heading font-semibold ${getGrowthRateColor(news.growthRate)}`}>
+                      {formatGrowthRate(news.growthRate).text}
                     </div>
                   </div>
 

@@ -58,54 +58,9 @@ export function useSupabaseNews(limit: number = 20): UseSupabaseNewsReturn {
 
       // Fetch from secure public view, ordered by popularity_score descending
       const { data, error: supabaseError } = await supabase
-        .from('public_v_home_news')
-        .select(`
-          id,
-          rank,
-          title,
-          summary,
-          summary_en,
-          category,
-          platform,
-          channel,
-          video_id,
-          popularity_score,
-          popularity_score_previous,
-          growth_rate_num,
-          growth_rate_raw,
-          views,
-          likes,
-          comments,
-          display_image_url,
-          ai_image_prompt,
-          source_url,
-          duration,
-          description,
-          keywords,
-          platform_mentions,
-          reason,
-          ai_opinion,
-          score_details,
-          created_at,
-          updated_at,
-          published_at,
-          published_date,
-          summary_date,
-          view_details,
-          view_count,
-          like_count,
-          comment_count,
-          raw_view,
-          ai_image_url,
-          extra,
-          image_url,
-          display_image_url_raw,
-          is_ai_image,
-          platforms_raw,
-          safe_image_url,
-          channel_title
-        `)
-        .order('rank', { ascending: true })
+        .from('v_home_news')
+        .select('*')
+        .order('popularity_score', { ascending: false })
         .limit(limit)
 
       if (supabaseError) {
@@ -121,7 +76,7 @@ export function useSupabaseNews(limit: number = 20): UseSupabaseNewsReturn {
 
       // Transform Supabase data to NewsItem format with ranking
       const transformedNews = data.map((item, index) => 
-        transformSupabaseToNewsItem(item as any, index + 1)
+        transformSupabaseToNewsItem(item as NewsTrend, index + 1)
       )
 
       console.log(`✅ Loaded ${transformedNews.length} news items from Supabase`)

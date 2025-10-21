@@ -107,7 +107,7 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
           <div className="flex items-center gap-2 mb-4 -mt-2 -mx-2 px-4 py-2 bg-gradient-to-r from-accent-500 to-thai-500 text-white rounded-t-2xl">
             <Star className="w-4 h-4" />
             <span className="text-sm font-semibold">
-              #{news.rank ?? index + 1} Top Story
+              #{news.rank || index + 1} Top Story
             </span>
           </div>
         )}
@@ -120,7 +120,7 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
               {/* Badges row */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm text-concrete-600 dark:text-concrete-400">
-                  #{news.rank ?? index + 1}
+                  #{news.rank || index + 1}
                 </span>
                 
                 {news.category && (
@@ -142,10 +142,10 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
                   </span>
                 )}
                 
-                {getGrowthRateDisplay(news.growthRateValue) && (
-                  <span className={`px-2 py-1 bg-green-100 dark:bg-green-900/30 text-xs font-medium rounded-full ${getGrowthRateColor(news.growthRateValue)}`}>
+                {getGrowthRateDisplay(news.growthRate) && (
+                  <span className={`px-2 py-1 bg-green-100 dark:bg-green-900/30 text-xs font-medium rounded-full ${getGrowthRateColor(news.growthRate)}`}>
                     <TrendingUp className="w-3 h-3 inline mr-1" />
-                    {getGrowthRateDisplay(news.growthRateValue)}
+                    {getGrowthRateDisplay(news.growthRate)}
                   </span>
                 )}
               </div>
@@ -158,7 +158,7 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
               {/* Meta info */}
               <div className="flex items-center gap-4 text-sm text-concrete-600 dark:text-concrete-400">
                 <div className="flex items-center gap-1">
-                  <span>{news.channel || news.channelTitle || '–'}</span>
+                  <span>{news.channelTitle || '–'}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
@@ -168,9 +168,9 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
             </div>
             
             {/* Popularity score */}
-            <div className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg ${getPopularityBg(news.popularityScore || 0)} min-w-[140px]`}>
-              <div className={`text-2xl font-bold ${getPopularityColor(news.popularityScore || 0)}`}>
-                {(news.popularityScore || 0).toFixed(1)}
+            <div className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg ${getPopularityBg(news.popularityScore)} min-w-[140px]`}>
+              <div className={`text-2xl font-bold ${getPopularityColor(news.popularityScore)}`}>
+                {news.popularityScore.toFixed(1)}
               </div>
               <div className="text-xs text-concrete-600 dark:text-concrete-400">
                 /100
@@ -178,32 +178,30 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
             </div>
           </div>
 
-          {/* Image Section - Only for Top-3 with images */}
-          {news.showImage && news.imageUrl && (
-            <div className="relative">
-              <div className="aspect-video bg-concrete-100 dark:bg-void-800 rounded-lg overflow-hidden">
-                <img
-                  src={news.imageUrl}
-                  alt={`AI-generated illustration for: ${news.title}`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    console.warn(`Image load failed for story #${news.rank}, using placeholder`);
-                    (e.currentTarget as HTMLImageElement).src = '/placeholder-image.svg';
-                    setImageError(true);
-                  }}
-                />
-              </div>
-              
-              {/* AI-Generated Badge - Always show for API images */}
-              {!imageError && (
-                <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-full backdrop-blur-sm border border-white/20">
-                  <span className="flex items-center gap-1">
-                    🤖 <span className="font-medium">AI-Generated</span>
-                  </span>
-                </div>
-              )}
+          {/* Image Section */}
+          <div className="relative">
+            <div className="aspect-video bg-concrete-100 dark:bg-void-800 rounded-lg overflow-hidden">
+              <img
+                src={news.displayImageUrl}
+                alt={`Illustration for: ${news.title}`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.warn(`Image load failed for story #${news.rank}, using placeholder`);
+                  (e.currentTarget as HTMLImageElement).src = '/placeholder-image.svg';
+                  setImageError(true);
+                }}
+              />
             </div>
-          )}
+            
+            {/* AI-Generated Badge - Only show for AI images */}
+            {news.isAIImage && !imageError && (
+              <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 text-white text-xs rounded-full backdrop-blur-sm border border-white/20">
+                <span className="flex items-center gap-1">
+                  🤖 <span className="font-medium">AI-Generated</span>
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Metrics */}
           <div className="grid grid-cols-3 gap-3">
@@ -237,10 +235,10 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
           </div>
 
           {/* Summary */}
-          {(news.summaryEn || news.summary) && (
+          {(news.summary_en || news.summary) && (
             <div className="prose prose-sm max-w-none">
               <p className="text-concrete-700 dark:text-concrete-300 leading-relaxed line-clamp-3">
-                {language.code === 'en' && news.summaryEn ? news.summaryEn : news.summary}
+                {language.code === 'en' && news.summary_en ? news.summary_en : news.summary}
               </p>
             </div>
           )}
@@ -253,9 +251,9 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
           )}
 
           {/* Keywords (if available and USE_NEW_UI_SECTIONS) */}
-          {USE_LEGACY_MODAL_LAYOUT && news.keywordsList && news.keywordsList.length > 0 && (
+          {USE_LEGACY_MODAL_LAYOUT && news.keywords.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {news.keywordsList.slice(0, 4).map((keyword, idx) => (
+              {news.keywords.slice(0, 4).map((keyword, idx) => (
                 <span
                   key={idx}
                   className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-accent-100 text-accent-800 dark:bg-accent-800/20 dark:text-accent-300"
@@ -264,9 +262,9 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
                   {keyword}
                 </span>
               ))}
-              {news.keywordsList.length > 4 && (
+              {news.keywords.length > 4 && (
                 <span className="text-xs text-concrete-500 dark:text-concrete-500">
-                  +{news.keywordsList.length - 4} more
+                  +{news.keywords.length - 4} more
                 </span>
               )}
             </div>
@@ -274,9 +272,9 @@ export function EnhancedNewsCard({ news, index, onOpenModal }: EnhancedNewsCardP
 
           {/* Actions */}
           <div className="flex items-center justify-between">
-            {news.sourceUrl && (
+            {news.video_id && news.platform === 'YouTube' && (
               <a
-                href={news.sourceUrl}
+                href={`https://www.youtube.com/watch?v=${news.video_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors focus-ring"
