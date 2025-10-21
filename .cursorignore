@@ -1,0 +1,56 @@
+# Cursor Ignore - Disable AI Features for Sensitive Files
+# This file tells Cursor to disable AI features for specified patterns
+
+# Environment files (critical security - no AI access to secrets)
+.env
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+frontend/.env.local
+.env.local
+
+# Credentials and keys
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.json
+credentials.json
+auth.json
+*.secret
+
+# Build artifacts (may contain embedded secrets)
+.next/
+node_modules/
+dist/
+build/
+out/
+
+# Logs (may contain sensitive runtime data)
+*.log
+logs/
+log/
+
+# Database credentials
+*.db
+*.sqlite
+*.sqlite3
+postgrestools.local.jsonc
+**/.vscode/postgrestools*.json*
+
+# Security audit reports (may contain findings)
+**/reports/repo/*.json
+**/reports/db/*.json
+
+# Python virtual environments (third-party code)
+.venv/
+venv/
+ENV/
+
+# Backup files (may contain old secrets)
+*.bak
+*.backup
+*.old
+

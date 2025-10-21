@@ -1,11 +1,16 @@
 2025-09-30: Added: psql-runner + preflight/dry-run/exec/post-verify.
 2025-09-30: Updated: Session Pooler required by default for database connections.
+2025-10-21: Updated: Added comprehensive safeguards after Phase 1 purge incident (see 21_env_protection_and_postpurge_safeguards.mb)
 • Do not touch .env / .env.local automatically. Never rotate or write keys. No secrets in memory files.
+• **NEVER delete .env.local files** - they are required for local runtime (not just templates)
 • Frontend: uses only NEXT_PUBLIC_* and Supabase anon key. Backend jobs: service_role key (never client).
 • Respect the user's rule: "do not push to GitHub automatically (do not push)."
 • Keep environment parity notes, but not values. Document required variable names only.
 • Database migrations: SUPABASE_DB_URL stored only in .env.local (root level), must include ?sslmode=require
 • .gitignore blocks .env.local and scripts/db/logs/* to prevent credential leaks
+• .cursorignore blocks .env.local to disable AI features for secrets (added 2025-10-21)
 • Session Pooler: Use aws-*.pooler.supabase.com host, not db.*.supabase.co (direct host forbidden without --allow-direct flag)
+• Husky pre-commit hooks block any attempt to stage .env.local files (added 2025-10-21)
+• Build-time sentinel in next.config.js fails build if .env.local missing (added 2025-10-21)
 • Feature flags (dev only):
   • HOME_USE_DEMO=true - Use demo seed data instead of real data (never set in production)

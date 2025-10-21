@@ -105,7 +105,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     console.log(`[pdf-chromium] ✅ PDF generated successfully: ${pdfBuffer.length} bytes in ${duration}ms`);
     
     // Return PDF with proper headers
-    return new Response(pdfBuffer, {
+    // Convert Buffer to Uint8Array for Response constructor compatibility
+    return new Response(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

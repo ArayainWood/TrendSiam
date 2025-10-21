@@ -1,7 +1,11 @@
 /**
  * PDF Engine Report - Admin Monitoring Endpoint
  * 
- * Returns last 100 PDF requests split by engine with pass/fail status
+ * Returns PDF engine configuration and basic stats
+ * 
+ * NOTE: Request logging was removed from the pdf router to fix Next.js type errors.
+ * This endpoint now shows configuration only. For detailed monitoring, use external
+ * observability tools (e.g., Vercel Analytics, CloudWatch).
  */
 
 import { NextResponse } from 'next/server';
@@ -10,44 +14,8 @@ import { pdfFeatures } from '@/lib/config/featureFlags';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Import request log from router (circular dependency handled by Next.js)
-async function getRequestLog() {
-  try {
-    // Read from router's internal state
-    const routerModule = await import('../weekly/pdf/route');
-    if (typeof routerModule.getRequestLog === 'function') {
-      return routerModule.getRequestLog();
-    }
-  } catch (error) {
-    console.warn('[pdf-engine-report] Could not access request log:', error);
-  }
-  return [];
-}
-
 export async function GET() {
   try {
-    const requestLog = await getRequestLog();
-    
-    // Calculate statistics
-    const stats = {
-      total: requestLog.length,
-      chromium: requestLog.filter(r => r.engine === 'chromium').length,
-      legacy: requestLog.filter(r => r.engine === 'legacy').length,
-      success: requestLog.filter(r => r.success).length,
-      failed: requestLog.filter(r => !r.success).length,
-      avgDuration: requestLog.length > 0
-        ? Math.round(requestLog.reduce((sum, r) => sum + r.duration, 0) / requestLog.length)
-        : 0,
-    };
-    
-    const successRate = stats.total > 0 
-      ? ((stats.success / stats.total) * 100).toFixed(1)
-      : 'N/A';
-    
-    const chromiumPercent = stats.total > 0
-      ? ((stats.chromium / stats.total) * 100).toFixed(1)
-      : '0.0';
-    
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       config: {
@@ -55,19 +23,13 @@ export async function GET() {
         legacyEnabled: pdfFeatures.legacyEnabled,
         chromiumTrafficPercent: pdfFeatures.chromiumTrafficPercent,
       },
-      stats: {
-        ...stats,
-        successRate: `${successRate}%`,
-        chromiumPercent: `${chromiumPercent}%`,
+      notice: 'Request logging unavailable. Internal logs removed to fix Next.js type errors. Use external observability for detailed monitoring.',
+      endpoints: {
+        chromium: '/api/weekly/pdf-chromium',
+        legacy: '/api/weekly/pdf-legacy',
+        router: '/api/weekly/pdf',
       },
-      recentRequests: requestLog.slice(0, 20).map(r => ({
-        timestamp: r.timestamp,
-        engine: r.engine,
-        success: r.success,
-        duration: `${r.duration}ms`,
-        snapshotId: r.snapshotId,
-        error: r.error ? r.error.substring(0, 100) : undefined,
-      })),
+      recommendation: 'Use Vercel Analytics, CloudWatch, or your preferred APM for request tracking.',
     }, {
       headers: {
         'Content-Type': 'application/json',

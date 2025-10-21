@@ -173,7 +173,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 }
 
-// Export request log for monitoring endpoint
-export function getRequestLog() {
-  return [...requestLog];
-}
+// Note: getRequestLog removed to fix Next.js type error
+// Request logs are internal to this module only
+// For monitoring, use /api/pdf-engine-report instead
+

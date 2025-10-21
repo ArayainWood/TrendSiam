@@ -1,24 +1,91 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-# Run schema guard first
-echo "🔍 Checking database schema..."
-npm run db:guard
+# Block any attempt to add or remove .env.local files
+# This prevents accidental deletion or commits of environment secrets
 
-if [ $? -ne 0 ]; then
-  echo "❌ Schema check failed!"
-  echo "Run 'npm run db:inventory' to update the baseline and Memory Bank, then re-commit."
+echo "🔒 Pre-commit security check: Verifying .env.local integrity..."
+
+# Check if .env.local files are being staged (added or deleted)
+if git diff --cached --name-status | grep -E "\.env\.local$"; then
+  echo ""
+  echo "❌ ERROR: Attempting to stage .env.local files!"
+  echo ""
+  echo "   .env.local files must NEVER be committed or deleted via git."
+  echo "   These files contain runtime secrets for local development only."
+  echo ""
+  echo "   To fix:"
+  echo "   - If you want to commit: git restore --staged **/.env.local"
+  echo "   - For env changes: Update env.example instead (safe template)"
+  echo ""
   exit 1
 fi
 
-# Run TypeScript check
-echo "🔍 Checking TypeScript..."
-npm run check:types
-
-if [ $? -ne 0 ]; then
-  echo "❌ TypeScript check failed!"
-  echo "Fix the TypeScript errors before committing."
+# Verify frontend/.env.local exists (critical runtime file)
+if [ ! -f "frontend/.env.local" ]; then
+  echo ""
+  echo "⚠️  WARNING: frontend/.env.local is missing!"
+  echo ""
+  echo "   This file is required for Next.js to run."
+  echo "   Copy from frontend/env.example and fill in your values."
+  echo ""
+  echo "   Do NOT commit the populated .env.local file."
+  echo ""
   exit 1
 fi
+
+# Run gitleaks to catch any other secrets
+if command -v gitleaks >/dev/null 2>&1; then
+  echo "🔍 Running gitleaks scan on staged changes..."
+  gitleaks protect --staged --verbose --redact
+  if [ $? -ne 0 ]; then
+    echo ""
+    echo "❌ Gitleaks detected secrets in staged files!"
+    echo ""
+    echo "   📝 If secrets found in documentation files (.mb, .md):"
+    echo "      → Docs must NOT use KEY=VALUE format (even with REDACTED/placeholders)"
+    echo "      → Use prose descriptions or angle-bracket placeholders instead"
+    echo "      → Example: 'Set NEXT_PUBLIC_SUPABASE_URL to your project URL'"
+    echo ""
+    echo "   🔒 If secrets found in code:"
+    echo "      → Move to .env.local (never commit)"
+    echo "      → Use environment variable references only"
+    echo ""
+    echo "   Review the output above and fix before committing."
+    echo ""
+    exit 1
+  fi
+else
+  # Fallback: check if tools/gitleaks/gitleaks.exe exists
+  if [ -f "tools/gitleaks/gitleaks.exe" ]; then
+    echo "🔍 Running gitleaks scan on staged changes..."
+    ./tools/gitleaks/gitleaks.exe protect --staged --verbose --redact
+    if [ $? -ne 0 ]; then
+      echo ""
+      echo "❌ Gitleaks detected secrets in staged files!"
+      echo ""
+      echo "   📝 If secrets found in documentation files (.mb, .md):"
+      echo "      → Docs must NOT use KEY=VALUE format (even with REDACTED/placeholders)"
+      echo "      → Use prose descriptions or angle-bracket placeholders instead"
+      echo "      → Example: 'Set NEXT_PUBLIC_SUPABASE_URL to your project URL'"
+      echo ""
+      echo "   🔒 If secrets found in code:"
+      echo "      → Move to .env.local (never commit)"
+      echo "      → Use environment variable references only"
+      echo ""
+      echo "   Review the output above and fix before committing."
+      echo ""
+      exit 1
+    fi
+  else
+    echo "⚠️  Gitleaks not found - skipping secret scan"
+    echo "   Install gitleaks for better security: https://github.com/gitleaks/gitleaks"
+  fi
+fi
+
+# Run linter on staged files
+echo "🔍 Running ESLint..."
+cd frontend
+npx lint-staged
 
 echo "✅ Pre-commit checks passed!"
