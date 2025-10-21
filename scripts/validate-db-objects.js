@@ -185,12 +185,14 @@ async function checkHomeNewsColumns() {
     } else {
       const item = data[0]
       // Critical columns required by frontend (must exist and have correct types)
+      // Updated 2025-10-21 after Migration 006: added published_date
       const requiredFields = [
         'id', 
         'title', 
         'popularity_score',           // numeric(6,3) - display score
         'popularity_score_precise',   // numeric - full precision for sorting
-        'published_at',
+        'published_at',               // timestamp - display time (COALESCE)
+        'published_date',             // timestamp - raw date from base table (RESTORED in M006)
         'summary',
         'category',
         'platform'
@@ -202,7 +204,7 @@ async function checkHomeNewsColumns() {
       } else {
         // Verify popularity_score_precise is a number (not null/string)
         if (typeof item.popularity_score_precise === 'number' || item.popularity_score_precise === null) {
-          pass('v_home_news columns', `Has required fields including popularity_score_precise (numeric)`)
+          pass('v_home_news columns', `Has all required fields including published_date, published_at, popularity_score_precise`)
         } else {
           fail('v_home_news columns', `popularity_score_precise has wrong type: ${typeof item.popularity_score_precise}`)
         }

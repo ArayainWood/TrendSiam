@@ -1,0 +1,293 @@
+# Database Object Contract - TrendSiam
+# Purpose: Canonical definition of all DB objects used by frontend
+# Last Updated: 2025-10-21
+# Enforced By: scripts/validate-db-objects.js (CI validation)
+
+version: "1.0"
+schema: public
+enforced_by_ci: true
+
+views:
+  v_home_news:
+    description: "Home feed news items (alias to public_v_home_news)"
+    type: view
+    security: definer  # Uses postgres privileges, not anon
+    required_by:
+      - "frontend/src/app/page.tsx"
+      - "frontend/src/hooks/useSupabaseNews.ts"
+      - "frontend/src/components/news/SupabaseNewsGrid.tsx"
+      - "frontend/src/app/api/home/route.ts"
+    columns:
+      - name: id
+        type: text
+        nullable: false
+        description: "Unique story identifier"
+        critical: true
+      - name: title
+        type: text
+        nullable: false
+        description: "Story title (Thai)"
+        critical: true
+      - name: summary
+        type: text
+        nullable: true
+        description: "Story summary (Thai)"
+        critical: true
+      - name: summary_en
+        type: text
+        nullable: true
+        description: "Story summary (English)"
+      - name: category
+        type: text
+        nullable: true
+        description: "Story category"
+        critical: true
+      - name: platform
+        type: text
+        nullable: true
+        description: "Platform name (YouTube)"
+        critical: true
+      - name: channel
+        type: text
+        nullable: true
+        description: "Channel name"
+      - name: published_at
+        type: timestamp with time zone
+        nullable: true
+        description: "Original publish time (COALESCE of sources)"
+        critical: true
+      - name: published_date
+        type: timestamp with time zone
+        nullable: true
+        description: "Raw published_date from base table"
+        critical: true
+        added_in_migration: "006"
+      - name: snapshot_date
+        type: date
+        nullable: true
+        description: "Date added to DB"
+      - name: source_url
+        type: text
+        nullable: true
+        description: "Link to original content"
+      - name: ai_generated_image
+        type: text
+        nullable: true
+        description: "AI image URL (Top-3 only)"
+      - name: platform_thumbnail
+        type: text
+        nullable: true
+        description: "Platform thumbnail URL"
+      - name: ai_prompt
+        type: text
+        nullable: true
+        description: "AI image prompt"
+      - name: popularity_score
+        type: numeric
+        precision: [6, 3]
+        nullable: true
+        description: "Display score 0-100"
+        critical: true
+      - name: popularity_score_precise
+        type: numeric
+        nullable: true
+        description: "Full precision score for sorting"
+        critical: true
+        added_in_migration: "005"
+      - name: rank
+        type: bigint
+        nullable: true
+        description: "Row number (for display order)"
+      - name: video_views
+        type: bigint
+        nullable: true
+        description: "View count"
+      - name: likes
+        type: bigint
+        nullable: true
+        description: "Like count"
+      - name: comments
+        type: bigint
+        nullable: true
+        description: "Comment count"
+      - name: growth_rate_value
+        type: numeric
+        nullable: true
+        description: "Growth rate (numeric)"
+      - name: growth_rate_label
+        type: text
+        nullable: true
+        description: "Growth rate (label)"
+      - name: ai_opinion
+        type: text
+        nullable: true
+        description: "AI analysis"
+      - name: score_details
+        type: text
+        nullable: true
+        description: "Score breakdown"
+      - name: video_id
+        type: text
+        nullable: true
+        description: "YouTube video ID"
+      - name: external_id
+        type: text
+        nullable: true
+        description: "Platform external ID"
+      - name: platform_mentions
+        type: text
+        nullable: true
+        description: "Mentions"
+      - name: keywords
+        type: text
+        nullable: true
+        description: "Keywords"
+      - name: updated_at
+        type: timestamp with time zone
+        nullable: true
+        description: "Last updated timestamp"
+    total_columns: 29
+    contract_version: 3  # v1: 27 cols, v2: 28 cols (+popularity_score_precise), v3: 29 cols (+published_date)
+
+  public_v_home_news:
+    description: "Canonical home feed view (source of truth)"
+    type: view
+    security: definer
+    required_by:
+      - "frontend/src/app/api/home/ping/route.ts"
+      - "frontend/src/app/api/test-plan-b/route.ts"
+    inherits_from: null
+    columns: "Same as v_home_news (both are synchronized)"
+    total_columns: 29
+    contract_version: 3
+
+  public_v_system_meta:
+    description: "Safe system configuration keys (no secrets)"
+    type: view
+    security: definer
+    required_by:
+      - "frontend/src/app/api/system-meta/route.ts"
+    columns:
+      - name: key
+        type: text
+        nullable: false
+        description: "Config key name"
+        critical: true
+      - name: value
+        type: text
+        nullable: true
+        description: "Config value"
+        critical: true
+      - name: updated_at
+        type: timestamp with time zone
+        nullable: true
+        description: "Last updated"
+    total_columns: 3
+    expected_keys:
+      - "home_limit"
+      - "news_last_updated"
+      - "home_columns_hash"
+      - "home_freshness_policy"
+
+rpcs:
+  get_public_home_news:
+    description: "Fallback RPC for home feed"
+    security: invoker
+    parameters:
+      - name: p_limit
+        type: integer
+        default: 20
+      - name: p_offset
+        type: integer
+        default: 0
+    returns: "SETOF record"
+    note: "Known issue: return type mismatch. Use view instead."
+
+  get_public_system_meta:
+    description: "Fallback RPC for system meta"
+    security: definer
+    parameters: []
+    returns: "TABLE(key text, value text, updated_at timestamptz)"
+    status: working
+
+base_tables:
+  news_trends:
+    description: "News trends base table"
+    rls_enabled: true
+    anon_can_read: false  # Plan-B: anon reads views only
+    columns_used_in_views:
+      - id
+      - title
+      - summary
+      - summary_en
+      - category
+      - platform
+      - channel
+      - published_date
+      - popularity_score
+      - popularity_score_precise
+      - view_count
+      - like_count
+      - comment_count
+      - growth_rate
+      - ai_opinion
+      - score_details
+      - video_id
+      - external_id
+      - platform_mentions
+      - keywords
+      - ai_image_url
+      - ai_image_prompt
+      - source_url
+      - date
+      - created_at
+      - updated_at
+
+  stories:
+    description: "Stories metadata (joins with news_trends)"
+    rls_enabled: true
+    anon_can_read: false
+    columns_used_in_views:
+      - story_id
+      - summary_en
+      - publish_time
+      - ai_image_prompt
+
+breaking_changes:
+  - date: "2025-10-21"
+    migration: "006"
+    change: "Added published_date column to v_home_news"
+    impact: "HIGH - Missing column caused runtime errors"
+    frontend_files_affected: 12
+  - date: "2025-10-21"
+    migration: "005"
+    change: "Added popularity_score_precise column to v_home_news"
+    impact: "HIGH - Missing column caused runtime errors"
+    frontend_files_affected: 42
+
+validation_rules:
+  critical_columns_v_home_news:
+    - id
+    - title
+    - popularity_score
+    - popularity_score_precise
+    - published_at
+    - published_date  # CRITICAL: Added after Migration 006
+    - summary
+    - category
+    - platform
+
+ci_enforcement:
+  job: "db-smoke-test"
+  workflow: ".github/workflows/security-audit.yml"
+  script: "scripts/validate-db-objects.js"
+  runs_on: "pull_request, push to main"
+  fail_on_missing_columns: true
+
+---
+# Maintenance Notes
+# - Update this file BEFORE applying any migration that modifies views/RPCs
+# - Run `node scripts/validate-db-objects.js` after any schema change
+# - Increment contract_version when columns are added/removed
+# - Document breaking changes with impact assessment
+
