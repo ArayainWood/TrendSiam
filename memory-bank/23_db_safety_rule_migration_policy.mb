@@ -1,0 +1,332 @@
+# Memory Bank: Database Safety Rule & Migration Policy
+
+**Date Created:** 2025-10-21  
+**Last Updated:** 2025-10-21  
+**Category:** Database, Security, DevOps  
+**Status:** Active Policy (ENFORCED)
+
+---
+
+## Core Principle: Understand-Before-Change
+
+**Golden Rule:** NEVER modify database schemas, migrations, views, or functions without FIRST understanding the current system.
+
+### Why This Rule Exists
+
+**Incident:** 2025-10-21 - Migration 003 was changed from `public1` to `public` based on a Bugbot report, without verifying:
+1. Whether `public1` was intentional vs. a typo
+2. What schema views actually existed in
+3. What the live DB state was
+4. Whether the change would break runtime queries
+
+**Result:** Runtime error: `Could not find the table 'public.v_home_news' in the schema cache`
+
+**Root Cause:** The fix itself was CORRECT (`public` not `public1`), but the REAL issue (missing `v_home_news` alias view) was only uncovered AFTER deploy.
+
+---
+
+## DB Safety Checklist (MANDATORY)
+
+Before modifying ANY DB object (table, view, function, migration), complete this checklist:
+
+### 1. Understand Current State
+
+- [ ] Read existing migrations (`frontend/db/sql/migrations/**`)
+- [ ] Read DB docs (`reports/db/**`, `memory-bank/db_schema_inventory.mb`, `memory-bank/02_data_stack_and_schema.mb`)
+- [ ] Check live DB state (Supabase SQL Editor or `psql`)
+  ```sql
+  -- Check schemas
+  SELECT nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname != 'information_schema';
+  
+  -- Check views in schema
+  SELECT viewname FROM pg_views WHERE schemaname = 'public';
+  
+  -- Check functions in schema
+  SELECT proname, prosrc FROM pg_proc p 
+  JOIN pg_namespace n ON p.pronamespace = n.oid 
+  WHERE n.nspname = 'public';
+  ```
+- [ ] Grep codebase for references to the object you're changing
+  ```bash
+  # Example: Find all references to v_home_news
+  rg "v_home_news|public_v_home_news" frontend/src
+  ```
+
+### 2. Verify Dependencies
+
+- [ ] List all objects that DEPEND on what you're changing (views → functions → queries)
+- [ ] Check `depends_on` in `DB_OBJECT_MANIFEST.yaml`
+- [ ] Use `pg_depend` to find DB-level dependencies:
+  ```sql
+  SELECT DISTINCT dependent.relname AS dependent_view
+  FROM pg_depend 
+  JOIN pg_rewrite ON pg_depend.objid = pg_rewrite.oid 
+  JOIN pg_class as dependent ON pg_rewrite.ev_class = dependent.oid 
+  JOIN pg_class as source ON pg_depend.refobjid = source.oid 
+  WHERE source.relname = 'your_table_or_view';
+  ```
+
+### 3. Design Change Safely
+
+- [ ] **Views first, then functions, then grants/RLS** - order matters!
+- [ ] Use `CREATE OR REPLACE` (idempotent) where possible
+- [ ] Use `IF EXISTS` / `IF NOT EXISTS` for drops/creates
+- [ ] Set statement timeouts (`SET LOCAL statement_timeout = '10s';`)
+- [ ] Set lock timeouts (`SET LOCAL lock_timeout = '5s';`)
+- [ ] NO blind schema/name changes without verification
+- [ ] Document WHY (not just WHAT) in migration comments
+
+### 4. Write Rollback Plan
+
+- [ ] Document inverse SQL for rollback
+- [ ] Test rollback on dev/staging first
+- [ ] Add rollback commands to migration file header:
+  ```sql
+  -- Migration: 004_create_v_home_news_alias.sql
+  -- Rollback: DROP VIEW IF EXISTS public.v_home_news;
+  ```
+
+### 5. Test Before Deploy
+
+- [ ] Run migration on local DB copy
+- [ ] Verify all dependent queries still work
+- [ ] Check permissions (`has_table_privilege`, `has_function_privilege`)
+- [ ] Run `scripts/validate-db-objects.js` (if available)
+- [ ] Verify Plan-B compliance (anon reads views only, NOT base tables)
+
+### 6. Update Documentation
+
+- [ ] Update `DB_OBJECT_MANIFEST.yaml` with new/changed objects
+- [ ] Update `reports/db/SCHEMA_DECISION.md` if schema/policy changes
+- [ ] Update `memory-bank/db_schema_inventory.mb` if schema structure changes
+- [ ] Add entry to `changelog` section in manifest
+
+---
+
+## Migration Best Practices
+
+### Structure
+
+Every migration must have:
+
+```sql
+-- Migration NNN: <Purpose>
+-- Date: YYYY-MM-DD
+-- Purpose: <One-line summary>
+-- Risk: LOW/MEDIUM/HIGH - <Why>
+-- Idempotent: YES/NO - <Explanation>
+-- Rollback: <Inverse SQL>
+--
+-- CONTEXT:
+-- <Why is this change needed? What problem does it solve?>
+-- <What was the previous state?>
+--
+-- DEPENDENCIES:
+-- - Depends on: <List of objects this migration requires>
+-- - Affects: <List of objects this migration changes>
+-- - Used by: <List of code/features that rely on this>
+
+BEGIN;
+
+-- Set timeouts
+SET LOCAL statement_timeout = '10s';
+SET LOCAL lock_timeout = '5s';
+
+-- Your migration SQL here
+
+-- Verification block
+DO $$
+DECLARE
+    -- verification variables
+BEGIN
+    -- Check expected state
+    -- RAISE EXCEPTION if verification fails
+    -- RAISE NOTICE on success
+END $$;
+
+COMMIT;
+```
+
+### Order of Operations
+
+1. **Drop dependent objects** (CASCADE if needed, but document!)
+2. **Create/alter base objects** (tables, views)
+3. **Create/alter functions** (RPC, utilities)
+4. **Set ownership** (`ALTER ... OWNER TO postgres;`)
+5. **Set security** (`SET search_path`, `SECURITY DEFINER/INVOKER`)
+6. **Grant permissions** (`GRANT SELECT/EXECUTE TO anon, authenticated`)
+7. **Add comments** (`COMMENT ON ...`)
+8. **Verify** (DO block with assertions)
+
+### Forbidden Patterns
+
+❌ **Never do these:**
+
+```sql
+-- ❌ BAD: Schema change without verification
+ALTER FUNCTION public1.get_data() ...;  -- Is it public1 or public?
+
+-- ❌ BAD: Drop without CASCADE awareness
+DROP VIEW v_home_news;  -- What depends on this?
+
+-- ❌ BAD: No rollback plan
+-- Just migration SQL with no inverse documented
+
+-- ❌ BAD: Changing search_path without understanding
+ALTER FUNCTION foo() SET search_path = public;  -- Security risk!
+
+-- ❌ BAD: No verification
+-- Migration runs but doesn't check if it worked
+
+-- ❌ BAD: Hardcoded values without config
+CREATE VIEW ... WHERE limit = 20;  -- Should read from system_meta
+```
+
+✅ **Do these instead:**
+
+```sql
+-- ✅ GOOD: Verify schema first
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'public1') THEN
+        ALTER FUNCTION public1.get_data() ...;
+    ELSE
+        RAISE NOTICE 'Schema public1 not found, using public';
+        ALTER FUNCTION public.get_data() ...;
+    END IF;
+END $$;
+
+-- ✅ GOOD: Check dependencies before drop
+SELECT tablename FROM pg_tables WHERE tablename LIKE '%depends_on_v_home_news%';
+-- Then decide: CASCADE or manual drop
+
+-- ✅ GOOD: Document rollback
+-- Rollback: DROP VIEW public.v_home_news; (safe, no dependencies)
+
+-- ✅ GOOD: Secure search_path
+ALTER FUNCTION foo() SET search_path = pg_catalog, public;
+
+-- ✅ GOOD: Verify in migration
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_views WHERE viewname = 'v_home_news') THEN
+        RAISE EXCEPTION 'Migration failed: v_home_news not created!';
+    END IF;
+END $$;
+
+-- ✅ GOOD: Read config from system_meta
+CREATE VIEW ... WHERE limit = (SELECT value::int FROM system_meta WHERE key='home_limit');
+```
+
+---
+
+## Plan-B Security (CRITICAL)
+
+**Policy:** Frontend ALWAYS reads via **views**, NEVER via base tables.
+
+### Enforcement
+
+- [ ] Base tables: `REVOKE ALL FROM anon, authenticated;`
+- [ ] Views: `GRANT SELECT TO anon, authenticated;`
+- [ ] Functions: `GRANT EXECUTE TO anon, authenticated;` + `SECURITY DEFINER`
+- [ ] Verify: Run `scripts/validate-db-objects.js` or manual checks:
+  ```sql
+  -- This should return 0 rows (anon cannot read base tables)
+  SELECT tablename FROM pg_tables 
+  WHERE schemaname = 'public' 
+  AND tablename IN ('news_trends', 'stories', 'snapshots', 'system_meta')
+  AND has_table_privilege('anon', schemaname||'.'||tablename, 'SELECT');
+  ```
+
+---
+
+## Schema Policies
+
+### Canonical Schema: `public`
+
+**Decision:** ALL TrendSiam objects use the **`public` schema**.
+
+- No `public1`, `public2`, or custom schemas
+- Standard PostgreSQL/Supabase default
+- Fully-qualified names: `public.view_name` or set `search_path`
+
+### Search Path for Functions
+
+**Policy:** ALL functions must use `search_path = pg_catalog, public;`
+
+**Why:** Prevents SQL injection via search_path manipulation.
+
+**How:**
+```sql
+ALTER FUNCTION public.get_public_home_news(int, int) 
+    SET search_path = pg_catalog, public;
+```
+
+---
+
+## CI/CD Integration
+
+### Pre-Merge Checks
+
+1. **Lint SQL** (syntax check)
+2. **Run migration on test DB**
+3. **Verify schema state** (run `DB_OBJECT_MANIFEST.yaml` checks)
+4. **Check Plan-B compliance** (anon cannot read base tables)
+5. **Run `scripts/validate-db-objects.js`**
+
+### Post-Deploy Smoke Test
+
+```bash
+# In GitHub Actions (after deploy to staging/prod)
+- name: DB Smoke Test
+  run: |
+    npm run db:validate  # Runs validate-db-objects.js
+```
+
+---
+
+## Incident Response
+
+If a migration breaks production:
+
+1. **Immediate rollback** (use documented rollback SQL)
+2. **Verify rollback worked** (check view/function exists, queries work)
+3. **Root cause analysis** (what was missed in checklist?)
+4. **Update this doc** (add new check to prevent recurrence)
+5. **Post-mortem** (document in `reports/repo/INCIDENT_*.md`)
+
+---
+
+## Summary
+
+**Before ANY DB change:**
+1. ✅ Read existing migrations/docs
+2. ✅ Check live DB state
+3. ✅ Grep codebase for references
+4. ✅ Verify dependencies
+5. ✅ Write rollback plan
+6. ✅ Test locally first
+7. ✅ Update docs
+
+**Never:**
+- ❌ Blind schema renames
+- ❌ Migrations without rollback
+- ❌ Changes without verification
+- ❌ Deploy without testing
+
+**Always:**
+- ✅ Understand-before-change
+- ✅ Views → Functions → Grants (order)
+- ✅ Plan-B enforcement (views only)
+- ✅ Document WHY, not just WHAT
+
+---
+
+**Document Owner:** TrendSiam Dev Team  
+**Enforced By:** Code Review, CI/CD, This Checklist  
+**Review Date:** 2025-11-21
+
+---
+
+**END OF DOCUMENT**
+

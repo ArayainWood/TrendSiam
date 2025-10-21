@@ -36,7 +36,7 @@ OPENAI_API_KEY=sk-proj-your_openai_key
 # ===============================================
 
 # Next.js revalidation secret
-REVALIDATE_SECRET=trendsiam_secret_2025
+REVALIDATE_SECRET=your_revalidate_secret_here
 
 # Enable JSON fallback for testing (temporary)
 ALLOW_JSON_FALLBACK=true

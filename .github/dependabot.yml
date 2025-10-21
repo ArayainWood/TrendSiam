@@ -1,0 +1,210 @@
+# ====================================================================
+# Dependabot Configuration for TrendSiam
+# ====================================================================
+# Automates dependency updates and security patches for npm and pip
+# 
+# Documentation: https://docs.github.com/en/code-security/dependabot
+# Last Updated: 2025-10-21
+# ====================================================================
+
+version: 2
+
+# ====================================================================
+# UPDATE SCHEDULES
+# ====================================================================
+# - Weekly: Check for updates every Monday 06:00 UTC (13:00 Bangkok)
+# - Security: Check daily for critical security updates
+# - Grouped: Low-risk patch updates grouped into single PR
+# ====================================================================
+
+updates:
+  # ==================================================================
+  # NPM (Frontend Dependencies)
+  # ==================================================================
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    
+    # Open PRs limit
+    open-pull-requests-limit: 10
+    
+    # Grouping strategy for non-security updates
+    groups:
+      # Group patch updates (e.g., 1.2.3 -> 1.2.4)
+      patch-updates:
+        update-types:
+          - "patch"
+        patterns:
+          - "*"
+      
+      # Group minor updates for dev dependencies
+      dev-minor-updates:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+    
+    # Ignore rules (with justification)
+    ignore:
+      # Ignore major Next.js updates (breaking changes risk)
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      
+      # Ignore major React updates (ecosystem compatibility)
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      
+      # Playwright major updates (PDF generation compatibility)
+      - dependency-name: "playwright"
+        update-types: ["version-update:semver-major"]
+    
+    # Labels for auto-categorization
+    labels:
+      - "dependencies"
+      - "npm"
+      - "automated"
+    
+    # Commit message prefix
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    
+    # Allow direct pushes for security patches
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    
+    # Pull request reviewers (optional - configure if needed)
+    # reviewers:
+    #   - "security-team"
+    
+  # ==================================================================
+  # PIP (Backend Python Dependencies)
+  # ==================================================================
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "UTC"
+    
+    # Open PRs limit
+    open-pull-requests-limit: 5
+    
+    # Grouping strategy
+    groups:
+      # Group patch updates
+      patch-updates:
+        update-types:
+          - "patch"
+        patterns:
+          - "*"
+    
+    # Ignore rules
+    ignore:
+      # Ignore if breaking changes noted in changelog
+      # (Add specific packages here if needed)
+    
+    # Labels
+    labels:
+      - "dependencies"
+      - "pip"
+      - "python"
+      - "automated"
+    
+    # Commit message prefix
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    
+    # NOTE: requirements.txt uses --require-hashes
+    # Dependabot will maintain hashes automatically
+    
+  # ==================================================================
+  # GITHUB ACTIONS (CI/CD Workflows)
+  # ==================================================================
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "UTC"
+    
+    # Open PRs limit
+    open-pull-requests-limit: 3
+    
+    # Labels
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci/cd"
+      - "automated"
+    
+    # Commit message prefix
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"
+
+# ====================================================================
+# SECURITY ADVISORIES
+# ====================================================================
+# Dependabot Security Updates enabled by default
+# - Creates PRs immediately for critical/high severity vulnerabilities
+# - Separate from scheduled updates
+# - Labeled with "security" in addition to labels above
+# 
+# Review process:
+# 1. Critical (CVSS >= 9.0): Review within 24 hours
+# 2. High (CVSS 7.0-8.9): Review within 1 week
+# 3. Moderate (CVSS 4.0-6.9): Review within 2 weeks
+# 4. Low (CVSS < 4.0): Review with next scheduled update
+# ====================================================================
+
+# ====================================================================
+# AUTOMERGE STRATEGY (Recommended)
+# ====================================================================
+# Enable auto-merge for low-risk updates after CI passes:
+#
+# 1. Install GitHub CLI: gh auth login
+# 2. Enable auto-merge: gh repo edit --enable-auto-merge
+# 3. Configure branch protection rules:
+#    - Require status checks (CI must pass)
+#    - Require review for major updates only
+#    - Auto-merge patch updates
+#
+# Example workflow rule:
+# - Patch updates: Auto-merge after CI passes
+# - Minor updates: Auto-merge for dev dependencies only
+# - Major updates: Require manual review
+# - Security updates: Always require review
+# ====================================================================
+
+# ====================================================================
+# MONITORING & MAINTENANCE
+# ====================================================================
+# Monthly review checklist:
+# - [ ] Review and merge pending Dependabot PRs
+# - [ ] Check for stale/ignored updates
+# - [ ] Verify auto-merge is working correctly
+# - [ ] Update ignore rules if new breaking changes identified
+# - [ ] Review security advisory dashboard
+# ====================================================================
+
+# ====================================================================
+# RELATED DOCUMENTATION
+# ====================================================================
+# - memory-bank/22_dependency_security_policy.mb
+# - .github/workflows/security-audit.yml (CI workflow)
+# - reports/repo/SECURITY_DEPENDENCIES_AUDIT.md
+# ====================================================================
+
+# END OF CONFIGURATION
+

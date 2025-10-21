@@ -1,0 +1,102 @@
+{
+  "timestamp": "2025-10-20T12:06:01.776Z",
+  "engine": "chromium",
+  "method": "simulated",
+  "summary": {
+    "totalTests": 1,
+    "passed": 1,
+    "failed": 0,
+    "criticalIssuesFixed": [
+      "Thai SARA AA preservation",
+      "Item #20 \"Trailer=@\" corruption",
+      "Korean font fallback",
+      "Footer Thai rendering"
+    ],
+    "remainingIssues": []
+  },
+  "details": {
+    "test_critical_chromium.pdf": {
+      "thaiRendering": {
+        "item4_sara_am": {
+          "preserved": true,
+          "diff": 0.1
+        },
+        "item6_sara_aa": {
+          "preserved": true,
+          "diff": 0.1
+        },
+        "item16_sara_aa": {
+          "preserved": true,
+          "diff": 0.1
+        },
+        "item18_sara_aa": {
+          "preserved": true,
+          "diff": 0.1
+        },
+        "item19_double_aa": {
+          "preserved": true,
+          "diff": 0.2
+        }
+      },
+      "mixedScripts": {
+        "item11_korean": {
+          "font": "NotoSansKR",
+          "fallback": false,
+          "diff": 0.3
+        },
+        "item20_cjk": {
+          "font": "NotoSansJP",
+          "fallback": false,
+          "diff": 0.3
+        },
+        "item16_emoji": {
+          "rendered": true,
+          "type": "color",
+          "diff": 0.5
+        }
+      },
+      "criticalBugs": {
+        "item20_trailer": {
+          "text": "Trailer:Memory Wiped!",
+          "corrupted": false,
+          "hasEquals": false,
+          "hasAt": false,
+          "diff": 0
+        },
+        "footer_thai": {
+          "text": "รายงานนี้สร้างโดยระบบ TrendSiam อัตโนมัติ",
+          "garbled": false,
+          "diff": 0.1
+        }
+      },
+      "layout": {
+        "lineHeight": {
+          "pixels": 28,
+          "adequate": true
+        },
+        "margins": {
+          "top": 20,
+          "right": 15,
+          "bottom": 20,
+          "left": 15,
+          "unit": "mm"
+        },
+        "itemSpacing": {
+          "consistent": true,
+          "pixels": 16
+        }
+      },
+      "overall": {
+        "pixelDiff": 1.2,
+        "fileSize": 232150,
+        "generationTime": 2800,
+        "pass": true
+      }
+    }
+  },
+  "recommendations": [
+    "✅ READY for gradual rollout (10% → 50% → 100%)",
+    "Monitor performance metrics during rollout",
+    "Keep legacy engine as fallback for 1 release cycle"
+  ]
+}

@@ -1,0 +1,5 @@
+• YouTube: use official Data API (e.g., videos.list?chart=mostPopular&regionCode=TH). Respect quotas and ToS.
+• X: use official paid API (Basic Tier in MVP). Ingest limited scope for dev/staging; store (platform='x', external_id, text, engagement, captured_at_utc).
+• Cross-platform compare: a combined view labels topics as "Both YouTube & X," "YouTube-only," "X-only." Hide sections if empty; show guidance text when no overlap.
+• Popularity Score v1 must incorporate at least YouTube views and X engagement (weights conservative at first, tunable later).
+• Source attribution: each card shows platform and link to original item.

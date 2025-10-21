@@ -1,0 +1,68 @@
+name: Schema Guard CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  schema-guard:
+    runs-on: ubuntu-latest
+    
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+        
+      - name: Run Schema Guard
+        id: schema-guard
+        working-directory: ./frontend
+        run: npm run db:guard
+          
+      - name: Check TypeScript
+        id: check-types
+        working-directory: ./frontend
+        run: npm run check:types
+        
+      - name: Check View Contract
+        id: check-view
+        working-directory: ./frontend
+        run: npm run check:view
+          
+      - name: Check Home API
+        id: check-home
+        working-directory: ./frontend
+        run: npm run check:home
+        
+      - name: Check API Health
+        id: check-health
+        working-directory: ./frontend
+        run: npm run check:health
+          
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Schema Guard Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Schema validation: ${{ steps.schema-guard.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- TypeScript check: ${{ steps.check-types.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- View contract: ${{ steps.check-view.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- API validation: ${{ steps.check-home.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- API health: ${{ steps.check-health.outcome }}" >> $GITHUB_STEP_SUMMARY

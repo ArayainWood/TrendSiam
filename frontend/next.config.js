@@ -1,4 +1,50 @@
-/** @type {import('next').NextConfig} */
+/** @type {import('next').NextConfig */
+
+// ================================================================
+// ENV SENTINEL: Verify .env.local exists before build
+// ================================================================
+// This prevents the issue where Phase 1 purge deleted .env.local
+// and broke the app. Now we fail fast with a helpful message.
+// ================================================================
+
+const fs = require('fs');
+const path = require('path');
+
+const ENV_LOCAL_PATH = path.join(__dirname, '.env.local');
+const ENV_EXAMPLE_PATH = path.join(__dirname, 'env.example');
+
+// Only check in development/local builds (production uses different env vars)
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL && !process.env.RENDER) {
+  if (!fs.existsSync(ENV_LOCAL_PATH)) {
+    console.error('\n❌ CRITICAL: frontend/.env.local is missing!\n');
+    console.error('   This file is required for local development.');
+    console.error('   It contains runtime secrets (Supabase keys, API keys, etc.)\n');
+    console.error('   To fix:');
+    console.error(`   1. Copy template: cp ${ENV_EXAMPLE_PATH} ${ENV_LOCAL_PATH}`);
+    console.error('   2. Fill in your actual values from Supabase dashboard');
+    console.error('   3. NEVER commit .env.local to git (already in .gitignore)\n');
+    console.error('   If you need the original values, restore from backup:');
+    console.error('   D:\\TrendSiam_BACKUP\\frontend\\.env.local\n');
+    
+    // Fail the build
+    process.exit(1);
+  } else {
+    console.log('✅ ENV Check: .env.local found');
+    
+    // Verify critical keys exist (basic sanity check)
+    require('dotenv').config({ path: ENV_LOCAL_PATH });
+    const requiredKeys = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+    const missingKeys = requiredKeys.filter(key => !process.env[key]);
+    
+    if (missingKeys.length > 0) {
+      console.error('\n⚠️  WARNING: Missing required environment variables:');
+      missingKeys.forEach(key => console.error(`   - ${key}`));
+      console.error('\n   Update your .env.local file with values from Supabase dashboard.\n');
+      // Warn but don't fail (they might be set elsewhere)
+    }
+  }
+}
+
 const nextConfig = {
   // Prevent ESLint from failing the production build (Render)
   eslint: {

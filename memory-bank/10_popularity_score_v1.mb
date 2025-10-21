@@ -1,0 +1,4 @@
+• Inputs (minimum viable): YouTube view count & velocity, X engagement & velocity, presence across multiple sources.
+• Time features: use velocity/decay basics; store UTC timestamps; compute local-day aggregates in views.
+• Weighting: start conservative; avoid large swings day-to-day; expose final score but hide raw internals from public views.
+• Labels (future): HIT/Spike/Stable/Decay derived from slope and recent history.

@@ -172,6 +172,11 @@ celerybeat.pid
 !.vscode/extensions.json
 *.code-workspace
 
+# Postgrestools LSP local config (contains credentials)
+.vscode/postgrestools.local.jsonc
+postgrestools.local.jsonc
+**/.vscode/postgrestools*.json*
+
 # JetBrains IDEs
 .idea/
 *.iws
@@ -312,6 +317,15 @@ test_*
 *_debug.py
 *.test.local
 
+# Test artifacts (generated PDFs, screenshots)
+*.pdf
+test-*.pdf
+fixed*.pdf
+enhanced*.pdf
+*-test.pdf
+screenshots/
+*.png.bak
+
 # Mock data
 mock_*
 *_mock.*
@@ -352,9 +366,20 @@ settings.local.json
 *.heapprofile
 *.log
 
+# Database execution logs
+scripts/db/logs/
+
+# Audit and security reports (may contain sensitive data)
+reports/repo/*.json
+reports/repo/*.log
+reports/db/*.log
+
 # Monitoring and analytics
 .monitoring/
 analytics/
+
+.cursor/
+
 
 # ================================================================
 # END OF FILE

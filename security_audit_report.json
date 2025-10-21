@@ -23,7 +23,7 @@
       "file": ".env",
       "line": 14,
       "secret_type": "youtube_api_key",
-      "preview": "AIzaSyDk3kb3BN1zT5xMIUz9EabvMlkUhK4LDjg"
+      "preview": "AIzaSy[REDACTED_FOR_SECURITY]"
     },
     {
       "type": "hardcoded_secret",
@@ -55,7 +55,7 @@
       "file": "fix_env.py",
       "line": 24,
       "secret_type": "youtube_api_key",
-      "preview": "AIzaSyDk3kb3BN1zT5xMIUz9EabvMlkUhK4LDjg"
+      "preview": "AIzaSy[REDACTED_FOR_SECURITY]"
     },
     {
       "type": "hardcoded_secret",
