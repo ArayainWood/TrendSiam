@@ -96,6 +96,12 @@
 
 **Purpose:** Create `public.v_home_news` as an alias to `public.public_v_home_news`
 
+**Fix Applied (2025-10-21):**
+- **Problem:** Original migration had `RAISE NOTICE 'Created v_home_news alias view';` outside the DO block (between COMMENT and verification DO block), which caused "Invalid statement: syntax error at or near RAISE" in Supabase SQL editor.
+- **Root Cause:** In PostgreSQL/Supabase, `RAISE` statements (NOTICE, WARNING, EXCEPTION) must be inside procedural blocks like DO, functions, or procedures. They cannot exist at the top level of a script.
+- **Solution:** Removed the standalone `RAISE NOTICE` at line 41. The verification DO block already has comprehensive RAISE statements, so this was redundant.
+- **Result:** Migration now executes cleanly in Supabase SQL editor with proper verification output.
+
 **SQL:**
 ```sql
 CREATE OR REPLACE VIEW public.v_home_news AS
@@ -110,6 +116,12 @@ COMMENT ON VIEW public.v_home_news IS
 
 **Risk:** LOW - Creates new view, no data changes, idempotent  
 **Rollback:** `DROP VIEW IF EXISTS public.v_home_news;`
+
+**Applied:** 2025-10-21 via psql (D:\TrendSiam)  
+**Verification:**
+- ✅ Column count verified: 27 columns (includes all home feed fields)
+- ✅ Migration verification passed
+- ✅ Both views exist and accessible by anon role
 
 ### 2. Comprehensive DB Documentation
 

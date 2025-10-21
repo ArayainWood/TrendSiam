@@ -38,8 +38,6 @@ Created: 2025-10-21 to fix runtime error from inconsistent view naming.
 Apps should migrate to public_v_home_news for clarity and consistency.
 This view has the same 26-column contract as public_v_home_news.';
 
-RAISE NOTICE 'Created v_home_news alias view';
-
 -- =====================================================
 -- VERIFICATION
 -- =====================================================

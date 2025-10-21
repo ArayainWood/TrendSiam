@@ -206,8 +206,6 @@ jobs:
   db-smoke-test:
     name: DB Object Validation
     runs-on: ubuntu-latest
-    # Only run if Supabase credentials are available
-    if: ${{ vars.SUPABASE_PROJECT_URL != '' }}
     
     steps:
       - name: Checkout code
@@ -227,11 +225,15 @@ jobs:
       - name: Run DB validation script
         working-directory: frontend
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_PROJECT_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || '' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || '' }}
         run: |
-          node ../scripts/validate-db-objects.js
-          echo "✅ DB object validation passed"
+          if [ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            node ../scripts/validate-db-objects.js
+            echo "✅ DB object validation passed"
+          else
+            echo "⚠️  Skipping DB validation (no credentials)"
+          fi
         continue-on-error: true  # Don't fail CI if DB not available
       
       - name: Upload validation report

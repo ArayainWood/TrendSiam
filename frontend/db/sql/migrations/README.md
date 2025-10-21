@@ -129,6 +129,34 @@ See `memory-bank/23_db_safety_rule_migration_policy.mb` for full details.
 - Check if migration was already applied
 - Use `CREATE OR REPLACE` or `IF NOT EXISTS` for idempotency
 
+### "Invalid statement: syntax error at or near RAISE"
+
+**Problem:** `RAISE` statements (NOTICE, WARNING, EXCEPTION) must be inside procedural blocks.
+
+**Bad (causes error):**
+```sql
+-- Outside any block - ERROR!
+RAISE NOTICE 'Creating view...';
+
+CREATE OR REPLACE VIEW ...;
+```
+
+**Good (inside DO block):**
+```sql
+CREATE OR REPLACE VIEW ...;
+
+DO $$
+BEGIN
+    RAISE NOTICE 'View created successfully';
+END $$;
+```
+
+**Details:**
+- PostgreSQL/Supabase requires `RAISE` to be inside `DO $$`, functions, or procedures
+- This is different from psql's `\echo` command, which works at the top level
+- Solution: Move all `RAISE` statements into DO blocks or remove them if redundant
+- Fixed in Migration 004 (2025-10-21)
+
 ### View not found after migration
 
 - Refresh Supabase schema cache: `SELECT pg_catalog.pg_reload_conf();`
