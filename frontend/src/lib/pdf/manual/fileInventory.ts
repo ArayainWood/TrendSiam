@@ -131,12 +131,12 @@ function extractPythonImports(content: string): string[] {
   for (const line of lines) {
     const importMatch = line.match(/^(?:from\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+)?import\s+([a-zA-Z_][a-zA-Z0-9_.,\s]*)/);
     if (importMatch && importMatch[2]) {
-      const moduleName = importMatch[1]; // Renamed from 'module' to avoid Next.js reserved variable
+      const module = importMatch[1];
       const items = importMatch[2];
       const firstItem = items.split(',')[0];
       if (firstItem) {
-        if (moduleName) {
-          imports.push(`${moduleName}.${firstItem.trim()}`);
+        if (module) {
+          imports.push(`${module}.${firstItem.trim()}`);
         } else {
           imports.push(firstItem.trim());
         }

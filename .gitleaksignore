@@ -1,8 +1,0 @@
-# Gitleaks ignore file
-# See https://github.com/gitleaks/gitleaks#gitleaksignore
-
-# Gitleaks own documentation (contains example secrets, not real secrets)
-8aa00e0108a0b44363b65e8ee5b019fd3dc249ed:tools/gitleaks/README.md:generic-api-key:569
-8aa00e0108a0b44363b65e8ee5b019fd3dc249ed:tools/gitleaks/README.md:sidekiq-secret:51
-
-

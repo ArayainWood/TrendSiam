@@ -54,13 +54,7 @@ supabase>=2.0.0,<3.0.0
 # ===== SECURITY DEPENDENCIES =====
 
 # Cryptography for secure operations - UPDATED TO LATEST SECURE VERSION
-cryptography>=44.0.1,<45.0.0
-
-# HTTP/2 protocol - SECURITY UPDATE (force transitive dep upgrade)
-h2>=4.3.0,<5.0.0
-
-# OAuth/OIDC library - SECURITY UPDATE (force transitive dep upgrade)
-authlib>=1.6.5,<2.0.0
+cryptography>=42.0.0,<43.0.0
 
 # JSON Web Tokens (if needed for auth)
 PyJWT>=2.8.0,<3.0.0
@@ -83,6 +77,4 @@ pip-tools>=7.3.0,<8.0.0
 # Pin critical transitive dependencies to avoid supply chain attacks
 idna>=3.6,<4.0
 charset-normalizer>=3.3.0,<4.0
-
-# Pin setuptools for reproducibility (pip-tools requires explicit pin when using hashes)
-setuptools==80.9.0
+setuptools>=68.0.0

@@ -1,17 +1,4 @@
 {
-  "name": "trendsiam",
-  "version": "1.0.0",
-  "description": "TrendSiam - Thai News Intelligence Platform",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "db:dry": "node scripts/db/psql-runner.mjs --dry",
-    "db:exec": "node scripts/db/psql-runner.mjs",
-    "db:selftest": "node scripts/db/psql-runner.mjs --file scripts/db/sql/selftest/select_1.sql",
-    "db:preflight": "node scripts/db/preflight-analyzer.mjs",
-    "db:verify": "node scripts/db/post-verify.mjs",
-    "db:run": "node scripts/db/db-runner.mjs"
-  },
   "dependencies": {
     "@fontsource/noto-sans-thai": "^5.2.6",
     "@react-pdf/renderer": "^4.3.0",

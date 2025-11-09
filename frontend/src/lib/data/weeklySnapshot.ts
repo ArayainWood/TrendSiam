@@ -62,11 +62,11 @@ export async function fetchWeeklySnapshot(snapshotId?: string): Promise<WeeklySn
         auth: { persistSession: false, autoRefreshToken: false }
       });
       
-      // Use the correct public view (Plan-B compliant)
       const { data, error } = await supabase
-        .from('public_v_weekly_snapshots')
+        .from('weekly_report_snapshots')
         .select('*')
         .eq('snapshot_id', snapshotId)
+        .eq('status', 'published')
         .single();
       
       if (error || !data) {
@@ -179,9 +179,9 @@ export async function hasNewerSnapshot(currentSnapshotId: string): Promise<boole
   });
   
   try {
-    // Get the current snapshot's built_at time (use public view)
+    // Get the current snapshot's built_at time
     const { data: current } = await supabase
-      .from('public_v_weekly_snapshots')
+      .from('weekly_report_snapshots')
       .select('built_at')
       .eq('snapshot_id', currentSnapshotId)
       .single();
@@ -190,8 +190,9 @@ export async function hasNewerSnapshot(currentSnapshotId: string): Promise<boole
     
     // Check if any newer snapshots exist
     const { count } = await supabase
-      .from('public_v_weekly_snapshots')
+      .from('weekly_report_snapshots')
       .select('*', { count: 'exact', head: true })
+      .eq('status', 'published')
       .gt('built_at', current.built_at);
     
     return (count || 0) > 0;

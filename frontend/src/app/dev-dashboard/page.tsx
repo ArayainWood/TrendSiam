@@ -40,30 +40,30 @@ interface PipelineHealth {
   timestamp: string
 }
 
-// Hide in production (check before defining component to avoid hooks issues)
-function ProductionFallback() {
-  return (
-    <Layout showFilters={false}>
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Dashboard Not Available
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Developer dashboard is only available in development mode
-          </p>
-        </div>
-      </div>
-    </Layout>
-  )
-}
-
 export default function DevDashboard() {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
   const [pipelineHealth, setPipelineHealth] = useState<PipelineHealth | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+
+  // Hide in production
+  if (process.env.NODE_ENV === 'production') {
+    return (
+      <Layout showFilters={false}>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              Dashboard Not Available
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Developer dashboard is only available in development mode
+            </p>
+          </div>
+        </div>
+      </Layout>
+    )
+  }
 
   const fetchSystemStatus = async () => {
     try {
@@ -135,11 +135,6 @@ export default function DevDashboard() {
     if (diffMinutes < 60) return `${diffMinutes} minutes ago`
     if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)} hours ago`
     return `${Math.floor(diffMinutes / 1440)} days ago`
-  }
-
-  // Check if in production and return fallback component
-  if (process.env.NODE_ENV === 'production') {
-    return <ProductionFallback />
   }
 
   return (

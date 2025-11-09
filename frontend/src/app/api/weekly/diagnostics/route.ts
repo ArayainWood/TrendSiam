@@ -30,26 +30,26 @@ export async function GET() {
     // Build notes array
     const notes: string[] = [];
     
-    if (counts.viewPublishedCount === 0) {
-      notes.push('No published snapshots in view; check if snapshots are being published');
+    if (counts.tablePublishedCount === 0) {
+      notes.push('No published snapshots in table; check if snapshots are being published');
     }
     
-    if (counts.viewCount === 0 && counts.viewPublishedCount > 0) {
-      notes.push('View has data but published count is higher; possible filter mismatch');
+    if (counts.viewCount === 0 && counts.tablePublishedCount > 0) {
+      notes.push('View has no data but table has published snapshots; check if view exists or has proper permissions');
     }
     
-    if (!latestSnapshot && counts.viewPublishedCount > 0) {
+    if (!latestSnapshot && counts.tablePublishedCount > 0) {
       notes.push('Cannot fetch snapshots despite published count > 0; possible permission issue or env mismatch');
     }
     
-    if (!diagnosticData.latestFromView) {
-      notes.push('View returned no data; check if public_v_weekly_snapshots exists and has data');
+    if (diagnosticData.latestPublishedFromTable && !diagnosticData.latestFromView) {
+      notes.push('Table has data but view is empty; view might not exist or might filter differently');
     }
     
     // Check for potential env mismatch
     if (!projectRef) {
       notes.push('Could not extract project ref from SUPABASE_URL');
-    } else if (counts.viewPublishedCount > 0 && !latestSnapshot) {
+    } else if (counts.tablePublishedCount > 0 && !latestSnapshot) {
       notes.push(`Web points to project '${projectRef}' but cannot read snapshots; check if builder uses same project`);
     }
     
@@ -60,13 +60,11 @@ export async function GET() {
         hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       },
       latestFromView: diagnosticData.latestFromView,
+      latestPublishedFromTable: diagnosticData.latestPublishedFromTable,
       counts: {
         viewCount: counts.viewCount,
-        viewPublishedCount: counts.viewPublishedCount
-      },
-      diagnostics: {
-        totalCount: diagnosticData.totalCount,
-        publishedCount: diagnosticData.publishedCount
+        tablePublishedCount: counts.tablePublishedCount,
+        tableTotalCount: counts.tableTotalCount
       },
       notes: notes.length > 0 ? notes : undefined,
       timestamp: new Date().toISOString()
