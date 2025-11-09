@@ -1,0 +1,36 @@
+---
+description: Playbook Trendsiam — project-wide rules for Cursor. Apply to every chat and Cmd+K request in this workspace.
+alwaysApply: true
+globs:
+  - "**/*"
+---
+
+# Playbook Trendsiam (Project Rules)
+
+**Follow these rules for ALL TrendSiam work in this workspace:**
+
+1) **No Git publishing.** Never add/commit/push code to GitHub or perform any remote publishing from prompts or scripts.
+2) **Memory Bank first.** Always read the latest `.mb` Memory Bank files first and treat them as the single source of truth. Whenever we create/update anything, update the relevant `.mb` files as well. Use only real, latest files (no fabrications).
+3) **Don’t break other parts.** Changes must not regress other pages or systems. Add guards/tests so the same issue cannot recur.
+4) **English-only prompts.** All prompts generated for Cursor IDE must be in English.
+5) **Follow Playbook 2.0.** Always follow and reference Playbook 2.0 for security and approach (Plan-B: anon → public_v_* views only; service_role only for offline scripts).
+6) **Production-usable changes.** All changes must run with zero errors in real usage. Thoroughly test until they work as intended.
+7) **Final scan.** After finishing any task, scan the entire project for errors (lint/TypeScript/build/runtime routes/basic e2e) and fix them before closing the task.
+
+## Enforcement checklist (the agent must do this)
+- Read and cite relevant `.mb` files before making changes.
+- Use only public views from the DB in app/APIs (no base-table reads with anon).
+- Update verification/diagnostics scripts to avoid secrets and ensure contracts.
+- Keep prompts, logs, and docs in English; update `.mb` when behavior changes.
+- Before finishing: run type checks and basic runtime checks for the Home page and diagnostics endpoints.
+
+> If any rule conflicts with an instruction, **the Playbook Trendsiam rules win**.
+
+## References (read these first)
+- docs/playbook-2.0-summary.md
+- memory-bank/00_project_overview.mb
+- memory-bank/01_security_plan_b.mb
+- memory-bank/03_frontend_homepage_freshness.mb
+- memory-bank/09_playbook_core_roadmap.mb
+- memory-bank/10_popularity_score_v1.mb
+- memory-bank/13_testing_acceptance_criteria.mb

@@ -1,0 +1,70 @@
+# CodeQL Configuration for TrendSiam
+# This configuration scopes CodeQL analysis to production/runtime code only,
+# excluding test files, scripts, and documentation to reduce noise from
+# development-only code patterns.
+
+name: "TrendSiam CodeQL config"
+
+# Paths to include in the analysis - only production/runtime code
+paths:
+  - "app.py"                    # Main Streamlit application
+  - "frontend/"                 # Next.js frontend application
+  - "core/"                     # Core security and config modules
+  - "utils/"                    # Utility modules used at runtime
+  - "summarize_all_v3_supabase_only.py"  # Production summarizer
+  - "popularity_scorer.py"      # Production scoring module
+  - "ai_image_supabase_generator.py"     # Production image generator
+
+# Paths to exclude from analysis
+paths-ignore:
+  # Development and test files
+  - "scripts/"                  # Development scripts
+  - "tests/"                    # Test files
+  - "**/*test*"                 # Any test files
+  - "**/*debug*"                # Debug utilities
+  - "**/test_*"                 # Test files pattern
+  - "**/debug_*"                # Debug files pattern
+  - "validate_*.py"             # Validation scripts
+  - "fix_*.py"                  # Fix scripts
+  - "setup_*.py"                # Setup scripts
+  
+  # Documentation and non-code files
+  - "docs/"                     # Documentation
+  - "_portfolio_extras/"        # Archived files
+  - "**/*.md"                   # Markdown files
+  - "**/*.txt"                  # Text files
+  - "**/*.json"                 # JSON data files (except package.json)
+  - "**/*.sql"                  # SQL files
+  - "**/*.pdf"                  # PDF reports
+  - "**/*.html"                 # HTML templates
+  
+  # Build artifacts and generated files
+  - ".next/"                    # Next.js build output
+  - "build/"                    # Build directories
+  - "dist/"                     # Distribution files
+  - "**/node_modules/"          # Node dependencies
+  - "**/__pycache__/"           # Python cache
+  - ".venv/"                    # Python virtual environment
+  - "coverage/"                 # Coverage reports
+  - "reports/"                  # Generated reports
+  
+  # Configuration and logs
+  - "logs/"                     # Log files
+  - "security/"                 # Security scan reports
+  - ".github/"                  # GitHub Actions (except this config)
+  - "tmp/"                      # Temporary files
+  - "ai_generated_images/"      # Generated images directory
+
+# Query filters - use recommended security queries
+query-filters:
+  - include:
+      severity: error
+  - include:
+      severity: warning
+  - include:
+      tags contain: security
+
+# Additional security-extended queries
+queries:
+  - uses: security-extended
+  - uses: security-and-quality

@@ -23,7 +23,14 @@ class SecurityAwareFormatter(logging.Formatter):
         'password',
         'token',
         'secret',
-        'credential'
+        'credential',
+        'bearer',
+        'authorization',
+        'supabase_url',
+        'supabase_key',
+        'openai_api_key',
+        'youtube_api_key',
+        'service_role'
     ]
     
     def format(self, record: logging.LogRecord) -> str:
@@ -42,14 +49,26 @@ class SecurityAwareFormatter(logging.Formatter):
         return super().format(record)
     
     def _sanitize_message(self, message: str) -> str:
-        """Sanitize sensitive information from log messages"""
+        """Sanitize sensitive information and control characters from log messages"""
+        # First, remove control characters to prevent log injection
+        # Keep only printable characters, newlines, and tabs
+        message = ''.join(char for char in message if ord(char) >= 32 or char in '\n\t')
+        
         for pattern in self.SENSITIVE_PATTERNS:
             if pattern in message.lower():
                 # Replace potential API keys or sensitive data
                 import re
                 # Pattern to match API key-like strings
-                api_key_pattern = r'sk-[a-zA-Z0-9]+'
-                message = re.sub(api_key_pattern, 'sk-***REDACTED***', message)
+                api_key_patterns = [
+                    r'sk-[a-zA-Z0-9]{20,}',  # OpenAI
+                    r'AIza[a-zA-Z0-9_-]{35}',  # Google/YouTube
+                    r'ghp_[a-zA-Z0-9]{36}',  # GitHub
+                    r'github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}',  # GitHub PAT
+                    r'eyJ[a-zA-Z0-9._-]+',  # JWT tokens
+                    r'sb-[a-zA-Z0-9-]{20,}',  # Supabase
+                ]
+                for pattern in api_key_patterns:
+                    message = re.sub(pattern, '***REDACTED***', message)
                 
                 # Pattern to match other sensitive values after keywords
                 sensitive_pattern = rf'{pattern}[:\s=]+["\']?([^"\s\n]+)["\']?'
@@ -60,8 +79,26 @@ class SecurityAwareFormatter(logging.Formatter):
     def _sanitize_value(self, value: str) -> str:
         """Sanitize individual values"""
         # Check if value looks like an API key
-        if value.startswith('sk-') and len(value) > 20:
-            return 'sk-***REDACTED***'
+        api_key_prefixes = [
+            ('sk-', 20),  # OpenAI
+            ('AIza', 35),  # Google/YouTube
+            ('ghp_', 36),  # GitHub
+            ('github_pat_', 50),  # GitHub PAT
+            ('eyJ', 20),  # JWT
+            ('sb-', 20),  # Supabase
+        ]
+        
+        for prefix, min_length in api_key_prefixes:
+            if value.startswith(prefix) and len(value) > min_length:
+                return '***REDACTED***'
+        
+        # Also check if the value contains sensitive keywords
+        lower_value = value.lower()
+        if any(pattern in lower_value for pattern in self.SENSITIVE_PATTERNS):
+            # If the value is long and contains sensitive keywords, redact it
+            if len(value) > 20:
+                return '***REDACTED***'
+        
         return value
 
 class TrendSiamLogger:

@@ -9,6 +9,7 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { withErrorHandler, createErrorResponse } from '@/lib/api/errorHandler';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -136,7 +137,7 @@ export async function GET() {
     
   } catch (error: any) {
     diagnostics.status = 'error';
-    diagnostics.errors.push(`Fatal error: ${error.message}`);
+    diagnostics.errors.push(process.env.NODE_ENV === 'production' ? 'Fatal error' : `Fatal error: ${error.message}`);
     diagnostics.processingTime = Date.now() - t0;
     
     return new Response(JSON.stringify(diagnostics, null, 2), {

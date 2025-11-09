@@ -1,0 +1,57 @@
+# Weekly Deep CodeQL Scan
+# This workflow performs a comprehensive CodeQL scan including all code
+# (tests, scripts, etc.) to catch any security issues that might be
+# introduced in non-production code. It runs weekly and is non-blocking.
+
+name: CodeQL Deep Scan
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:  # Allow manual runs
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Deep Scan Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript', 'python']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL (Deep Scan - All Code)
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended
+        # No config file - analyze everything
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}/deep-scan"
+
+    # Non-blocking - always succeed
+    - name: Mark as non-blocking
+      if: failure()
+      run: |
+        echo "Deep scan found issues but this is non-blocking"
+        echo "Review the security tab for detailed findings"
+        exit 0
