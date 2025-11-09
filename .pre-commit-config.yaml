@@ -1,0 +1,98 @@
+# Pre-commit hooks for TrendSiam project
+# Install: pip install pre-commit
+# Setup: pre-commit install
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+
+  # Secret detection
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+
+  # Python specific
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.11
+        files: \.py$
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        additional_dependencies: [flake8-docstrings, flake8-bugbear]
+        args: ['--max-line-length=120', '--extend-ignore=E203,W503,D100,D101,D102']
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.6
+    hooks:
+      - id: bandit
+        args: ['-ll', '--recursive', '--exclude', '.venv,venv,node_modules,.next']
+
+  # JavaScript/TypeScript specific
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.56.0
+    hooks:
+      - id: eslint
+        files: \.[jt]sx?$
+        types: [file]
+        additional_dependencies:
+          - eslint
+          - eslint-config-next
+          - '@typescript-eslint/parser'
+          - '@typescript-eslint/eslint-plugin'
+
+  # Security for dependencies
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 37.153.4
+    hooks:
+      - id: renovate-config-validator
+
+  # Markdown
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix']
+
+# Local hooks
+  - repo: local
+    hooks:
+      - id: no-vendor-binaries
+        name: Check for vendor binaries
+        entry: bash -c 'find . -name "*.exe" -o -name "*.dll" -o -name "*.so" -o -name "*.dylib" | grep -v node_modules | grep -v .venv | grep -v .next'
+        language: system
+        pass_filenames: false
+        
+      - id: env-file-check
+        name: Check for .env files
+        entry: bash -c 'if git ls-files | grep -E "\.env$|\.env\..*$" | grep -v "\.env\.example$"; then exit 1; fi'
+        language: system
+        pass_filenames: false

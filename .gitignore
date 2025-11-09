@@ -338,6 +338,14 @@ fixtures/
 security-audit.json
 vulnerability-report.json
 
+# Security reports directory
+security/reports/
+
+# Security scanning artifacts
+gitleaks.json
+ripgrep-secrets.txt
+npm-audit.json
+
 # Local configuration files that might contain secrets
 local.json
 config.local.json

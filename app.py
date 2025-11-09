@@ -17,13 +17,17 @@ import os
 from dotenv import load_dotenv
 import requests
 import logging
+from core.logging_config import setup_logging, create_module_logger
+
+# Initialize module logger
+logger = create_module_logger(__name__)
 
 # WeasyPrint for HTML to PDF conversion - Import with fallback
 try:
     from weasyprint import HTML
     WEASYPRINT_AVAILABLE = True
 except ImportError:
-    print("Warning: WeasyPrint not found. PDF generation will not work.")
+    logger.warning("WeasyPrint not found. PDF generation will not work.")
     WEASYPRINT_AVAILABLE = False
 
 # Import shared HTML report generation functions
@@ -31,7 +35,7 @@ try:
     from generate_html_pdf import generate_html_report, calculate_metrics, calculate_category_breakdown
     HTML_FUNCTIONS_AVAILABLE = True
 except ImportError:
-    print("Warning: HTML report functions not found.")
+    logger.warning("HTML report functions not found.")
     HTML_FUNCTIONS_AVAILABLE = False
 
 from datetime import timedelta
@@ -3369,11 +3373,11 @@ def show_main_page():
         
         # Apply filters to data
         filtered_data = filter_news_data(news_data, selected_platform, selected_category, selected_date)
-        print(f"🔍 DEBUG: After filtering - {len(filtered_data)} items from {len(news_data)} total")
+        logger.debug(f"After filtering - {len(filtered_data)} items from {len(news_data)} total")
         
         # Sort by popularity score (descending), then by view count (descending)
         filtered_data = sort_news_by_popularity(filtered_data)
-        print(f"🔍 DEBUG: After sorting - {len(filtered_data)} items ready for display")
+        logger.debug(f"After sorting - {len(filtered_data)} items ready for display")
         
         # Show filter results
         if len(filtered_data) != len(news_data):
